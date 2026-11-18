@@ -1,0 +1,10 @@
+<h2>Add Flashcard</h2>
+<form action="/flashcards/add" method="POST" class="form-container">
+  <input type="text" name="question" placeholder="Add question..." required />
+  <textarea name="answer" placeholder="Add answer..." required></textarea>
+  <input type="text" name="tags" placeholder="Add tags (comma separated)" />
+  <button type="submit" class="btn primary">Proceed</button>
+</form>
+<a href="/dashboard" class="back-link">← Go back</a>
+
+<script src="/js/validation.js"></script>

@@ -1,0 +1,9 @@
+<h2>Flashcard Detail</h2>
+<div class="detail-card">
+  <p><strong>Question:</strong> {{flashcard.question}}</p>
+  <p><strong>Answer:</strong> {{flashcard.answer}}</p>
+  {{#if flashcard.tags.length}}
+    <p><strong>Tags:</strong> {{flashcard.tags}}</p>
+  {{/if}}
+</div>
+<a href="/flashcards" class="btn">Go back</a>

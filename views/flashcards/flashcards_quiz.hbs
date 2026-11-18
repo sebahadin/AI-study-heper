@@ -1,0 +1,48 @@
+<section class="section" style="width: 680px;">
+  <h3>Take a Quiz</h3>
+
+  <div class="controls" id="quizFilters">
+    <label>Filter by Books (tags)</label>
+    <div class="tag-grid" id="quizTagList">
+      {{#if books.length}}
+        {{#each books}}
+          <label class="tag-checkbox">
+            <input type="checkbox" value="{{this._id}}" data-tag-checkbox>
+            <span>{{this.title}}</span>
+          </label>
+        {{/each}}
+      {{else}}
+        <p class="muted">Add books to tag and filter your flashcards.</p>
+      {{/if}}
+    </div>
+    <p class="tag-warning hidden" id="tagWarning">Select at least one book tag to start the quiz.</p>
+    <button id="startQuizBtn" class="add-btn">Start Quiz</button>
+  </div>
+
+  <div id="quizHud" style="display:none; margin-top:10px;">
+    <div><strong>Score:</strong> <span id="scoreText">0</span></div>
+    <div><strong>Question:</strong> <span id="idxText">0</span>/<span id="totalText">0</span></div>
+  </div>
+
+  <div id="questionBox" class="item" style="display:none; margin-top:12px;">
+    <p id="questionText"></p>
+    <div id="optionsBox" class="options-list"></div>
+
+    <div class="row" style="margin-top:10px; display:flex; gap:8px;">
+      <button id="nextBtn" class="details-btn" disabled>Next</button>
+      <button id="leaveBtn" class="remove-btn">Leave</button>
+    </div>
+  </div>
+
+  <div id="resultBox" class="item" style="display:none; margin-top:12px;">
+    <h4>Quiz Results</h4>
+    <p><strong>Final Score:</strong> <span id="finalScore"></span></p>
+    <div id="missedList"></div>
+    <div class="row" style="margin-top:10px; display:flex; gap:8px;">
+      <button id="retryBtn" class="details-btn">Retry same tags</button>
+      <a href="/flashcards/quiz" class="add-btn">Choose different tags</a>
+    </div>
+  </div>
+</section>
+
+<script type="module" src="/js/quiz.js"></script>

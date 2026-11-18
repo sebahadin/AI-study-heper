@@ -1,0 +1,44 @@
+{{!-- views/flashcards/flashcardsList.hbs --}}
+<section class="section">
+  <h3>My Flashcards</h3>
+
+  <div class="actions spaced">
+    <a href="/dashboard" class="btn secondary">← Back to dashboard</a>
+    <a href="/flashcards/new" class="add-btn">Add flashcard</a>
+  </div>
+
+  {{#if flashcards.length}}
+    <div class="cards-scroll flashcards-scroll">
+      <div class="cards-list">
+      {{#each flashcards}}
+        <div class="card">
+          <p><strong>Question:</strong> {{question}}</p>
+          <p><strong>Answer:</strong> {{answer}}</p>
+
+          <p class="tags-row">
+            <strong>Tags:</strong>
+            {{#if tags.length}}
+              {{#each tags}}
+                <span class="tag">{{this.title}}</span>
+              {{/each}}
+            {{else}}
+              <span class="tag tag--muted">No tags</span>
+            {{/if}}
+          </p>
+
+          <div class="card-actions">
+            <a href="/flashcards/edit/{{_id}}" class="details-btn">Edit</a>
+            <form method="POST" action="/flashcards/delete/{{_id}}" style="display:inline;"
+              data-confirm="true"
+              data-confirm-message="Remove flashcard '{{question}}'?">
+              <button type="submit" class="remove-btn">Remove</button>
+            </form>
+          </div>
+        </div>
+      {{/each}}
+      </div>
+    </div>
+{{else}}
+  <p class="no-flashcards">You have no flashcards yet. <a href="/flashcards/new">Add one here.</a></p>
+{{/if}}
+</section>

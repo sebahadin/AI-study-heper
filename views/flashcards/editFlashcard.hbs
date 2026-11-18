@@ -1,0 +1,56 @@
+<section class="section">
+  <h3>Edit Flashcard</h3>
+
+  {{#if error}}<p class="error-message">{{error}}</p>{{/if}}
+
+  <form method="POST" action="/flashcards/{{flashcard._id}}/edit" class="form" id="flashcardForm" data-validate="flashcard">
+    <label>Question</label>
+    <input type="text" name="question" required value="{{flashcard.question}}">
+
+    <div class="grid-2">
+      <div>
+        <label>Option 1</label>
+        <input type="text" name="option1" required value="{{optionFields.option1}}">
+      </div>
+      <div>
+        <label>Option 2</label>
+        <input type="text" name="option2" required value="{{optionFields.option2}}">
+      </div>
+      <div>
+        <label>Option 3 (optional)</label>
+        <input type="text" name="option3" value="{{optionFields.option3}}">
+      </div>
+      <div>
+        <label>Option 4 (optional)</label>
+        <input type="text" name="option4" value="{{optionFields.option4}}">
+      </div>
+    </div>
+
+    <label>Correct Answer</label>
+    <select name="correctIndex" required>
+      <option value="0" {{#ifEquals flashcard.correctIndex 0}}selected{{/ifEquals}}>Option 1</option>
+      <option value="1" {{#ifEquals flashcard.correctIndex 1}}selected{{/ifEquals}}>Option 2</option>
+      <option value="2" {{#ifEquals flashcard.correctIndex 2}}selected{{/ifEquals}}>Option 3</option>
+      <option value="3" {{#ifEquals flashcard.correctIndex 3}}selected{{/ifEquals}}>Option 4</option>
+    </select>
+
+    <label>Tags (choose one or more books)</label>
+    <div class="tag-grid" data-tag-group>
+      {{#if books.length}}
+        {{#each books}}
+          <label class="tag-checkbox">
+            <input type="checkbox" name="tags" value="{{this._id}}" {{#if this.isSelected}}checked{{/if}}>
+            <span>{{this.title}}</span>
+          </label>
+        {{/each}}
+      {{else}}
+        <p class="muted">Add some books first so you can tag this flashcard.</p>
+      {{/if}}
+    </div>
+
+    <div class="actions spaced">
+      <a href="/flashcards/list" class="btn secondary">Cancel</a>
+      <button type="submit" class="add-btn">Save changes</button>
+    </div>
+  </form>
+</section>
