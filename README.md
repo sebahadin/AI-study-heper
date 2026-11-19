@@ -1,282 +1,101 @@
-# AI-study-heper
+# AI-study-heper — Classmate
 
-## Overview  
-**StudyHelper** is a personal academic web app that helps students organize and manage their learning resources in one place.  
-Users can:  
-- Manage a personal library of books and mark favorites  
-- Write and edit study notes (optionally linked to books)  
-- Create and study flashcards for self-testing  
+Classmate is a personal study app for books, notes, multiple-choice flashcards, and quizzes. Its frontend uses React, TypeScript, and Vite. Express provides JSON APIs, Passport authentication, and MongoDB access through Mongoose.
 
-The app uses **Express** and **MongoDB**, styled with **Tailwind CSS**, and will integrate **React** components in later milestones to support interactive features such as flashcard quiz mode.
+## Repository structure
 
----
-
-## Data Model  
-
-The application stores **Users**, **Books**, **Notes**, and **Flashcards**.  
-
-* Each **User** can have many Books, Notes, and Flashcards.  
-* Each **Note** may optionally reference a Book.  
-
-### Example Schemas  
-
-```js
-// User
-{
-  username: String,
-  email: String,
-  password: String
-}
-
-// Book
-{
-  title: String,
-  author: String,
-  category: String,
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  isFavorite: Boolean
-}
-
-// Note
-{
-  title: String,
-  content: String,
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  book: { type: mongoose.Schema.Types.ObjectId, ref: 'Book', default: null },
-  createdAt: { type: Date, default: Date.now }
-}
-
-// Flashcard
-{
-  question: String,
-  answer: String,
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  tags: [String],
-  createdAt: { type: Date, default: Date.now }
-}
+```text
+frontend/          React pages, components, styles, and tests
+backend/src/       Express app, Passport configuration, models, and API routes
+backend/test/      Unit tests and HTTP integration tests
+documentation/     Existing screenshots and app diagrams
 ```
 
----
+## Local development
 
+Use Node.js 22.12+ or 24 and a local MongoDB instance or MongoDB Atlas database.
 
+1. Install each application's dependencies:
 
-## Sample Documents and Relationships
+   ```sh
+   npm ci --prefix backend
+   npm ci --prefix frontend
+   ```
 
-Below are sample documents that will be stored in the MongoDB database.
-Each object represents one of the core entities (**User**, **Book**, **Note**, and **Flashcard**) and illustrates how they are related.
+2. Create `backend/.env` from `backend/.env.example`. Set `DSN` to your MongoDB connection string and `SESSION_SECRET` to a long random value. Existing MongoDB collections, document IDs, usernames, and password hashes remain compatible.
 
----
+3. Start the API:
 
-### 1. User Document
+   ```sh
+   npm run dev --prefix backend
+   ```
 
-Represents an individual user of the StudyHelper application.
+4. In another terminal, start React:
 
-```json
-{
-  "_id": "userId",
-  "username": "Sebahadin",
-  "email": "seb@example.com",
-  "password": "hashed_password_here"
-}
+   ```sh
+   npm run dev --prefix frontend
+   ```
+
+Open the URL printed by Vite (normally `http://127.0.0.1:5173`). Vite proxies `/api` to Express on port 3000. To change the proxy target, copy `frontend/.env.example` to `frontend/.env` and set `API_PROXY_TARGET`. Keep database credentials and session secrets only in the backend environment.
+
+If the Express port changes, update the Vite proxy target too. Set `CLIENT_ORIGIN` to the browser-facing frontend origin. Separate production origins would also require an explicit cookie/CORS configuration; the default setup serves the UI and API from one origin.
+
+## Production build
+
+```sh
+npm run build --prefix frontend
+NODE_ENV=production npm start --prefix backend
 ```
 
-Each user can have multiple books, notes, and flashcards linked to them.
+Express serves `frontend/dist` and supports direct navigation and refresh on React routes. Deploy behind HTTPS with `SESSION_SECRET` set. Production cookies are secure, HttpOnly, and SameSite=Lax; Passport sessions are stored in MongoDB. The app trusts one reverse proxy for HTTPS detection, so configure this for your hosting topology.
 
-The `_id` of the user is referenced in those related documents.
+## Features
 
----
+- Register with username, email, and password; log in with username; restore the session after refresh; log out.
+- Create, read, edit, and remove books, including category, description, and optional URL.
+- Write standalone notes or link them to a book. Format text with fonts, sizes, headings, emphasis, colors, highlights, alignment, lists, quotes, and links. Switch between Edit and Read preview without losing your current draft, then click Save note (or ⌘/Ctrl+S). Saved notes open in reading mode and can be reopened for editing.
+- Create and edit flashcards with two to four answer options, one correct answer, and one or more book tags.
+- Filter a quiz by any selected book, answer questions, review mistakes, end early, and retry.
+- View books, notes, and flashcard counts on the dashboard.
+- Confirm deletions. Deleting a book unlinks its notes and removes its flashcard tags while preserving both. Cards with no remaining books stay available for editing or removal.
 
-### 2. Book Document
+Quiz scores stay in browser memory and are not persisted. The existing favorite flag is preserved in MongoDB, without adding a new favorite control. AI functionality is deferred.
 
-Represents a book or study material added by the user.
+## API
 
-```json
-{
-  "_id": "bookId",
-  "title": "Clean Code",
-  "author": "Robert Martin",
-  "category": "Software Engineering",
-  "user": "userId",
-  "isFavorite": true
-}
+All endpoints return JSON, except successful logout and deletions, which return HTTP 204. Authentication uses an HttpOnly session cookie. Request bodies use JSON; API clients must send the cookie on authenticated requests.
+
+| Endpoint | Methods | Purpose |
+| --- | --- | --- |
+| `/api/auth/register` | POST | Register; return a message prompting login |
+| `/api/auth/login` | POST | Log in and return public user fields |
+| `/api/auth/me` | GET | Return the current user, or HTTP 401 |
+| `/api/auth/logout` | POST | Destroy the session |
+| `/api/dashboard` | GET | Books, notes, and flashcard count |
+| `/api/books` and `/api/books/:id` | GET, POST / GET, PATCH, DELETE | Book management |
+| `/api/notes` and `/api/notes/:id` | GET, POST / GET, PATCH, DELETE | Note management |
+| `/api/flashcards` and `/api/flashcards/:id` | GET, POST / GET, PATCH, DELETE | Flashcard management |
+
+Filter flashcards with `/api/flashcards?tags=bookId1,bookId2`. Flashcard writes accept `question`, `options`, `correctIndex` (zero-based), and `tags` (book IDs). Optional empty options are removed while preserving the selected correct answer.
+
+Note writes accept `title`, optional `book` (an owned book ID or `null`), and either plain `content` or rich `contentHtml`. Rich HTML is sanitized on the server; `content` is derived from it for previews and search. Plain-text updates clear previous rich formatting; title/book-only updates preserve it. Legacy notes need no migration. Notes include `updatedAt` after an edit.
+
+Errors have `{ "error": "message", "fields": { "field": "message" } }`; `fields` is optional. Protected endpoints return HTTP 401; missing or inaccessible records return 404; invalid input returns 400; duplicate registration returns 409. Every record operation and book association is scoped to the authenticated user. Cross-site writes are rejected.
+
+## Checks
+
+```sh
+npm run lint --prefix backend
+npm test --prefix backend
+npm run lint --prefix frontend
+npm test --prefix frontend
+npm run build --prefix frontend
 ```
 
-The `user` field references the `_id` from the **User** collection.
+The default backend test run covers validation, cleanup, and HTTP boundaries. To also run real MongoDB/Passport integration tests, use a **disposable database whose name ends in `_test`**:
 
-A user can have multiple books, but each book belongs to exactly one user.
-
----
-
-### 3. Note Document
-
-Represents a note written by a user. It can optionally be associated with a book.
-
-```json
-{
-  "_id": "noteId",
-  "title": "OOP Principles",
-  "content": "Encapsulation, Inheritance, Polymorphism …",
-  "user": "userId",
-  "book": "bookId",
-  "createdAt": "2025-10-29T14:00:00Z"
-}
+```sh
+TEST_DSN=mongodb://127.0.0.1:27017/classmate_test npm test --prefix backend
 ```
 
-The `user` field references the author of the note (from **User**).
-
-The `book` field optionally references a specific **Book** the note is about.
-
-
----
-
-### 4. Flashcard Document
-
-Represents a question–answer pair for studying.
-
-```json
-{
-  "_id": "flashcardId",
-  "question": "What is encapsulation?",
-  "answer": "Hiding implementation details within a class.",
-  "user": "userId",
-  "tags": ["OOP", "midterm"],
-  "createdAt": "2025-10-29T14:00:00Z"
-}
-```
-
-The `user` field references the **User** who created the flashcard.
-
-Each user can have multiple flashcards (one-to-many relationship).
-
-Tags provide a way to categorize flashcards by topic or purpose.
-
-
-
-
----
-
-## [Link to First Draft Schem Project File](./src/db.mjs)  
-
----
-
-## Wireframes and Screens  
-
-All screenshots are stored in the `/documentation/` folder and displayed below.  
-Each image represents one core page or feature of **StudyHelper**.
-
----
-
-### Authentication Pages  
-
-**Register Page**  
-![Register Page](documentation/register.png)  
-Users can create an account by entering a username, password, and password confirmation.  
-
-**Login Page**  
-![Login Page](documentation/login.png)  
-Registered users log in to access their personalized dashboard.  
-
----
-
-### Dashboard and Details Pages  
-
-**Dashboard Page**  
-![Dashboard Page](documentation/dashboard.png)  
-Displays three main sections — Books, Notes, and Flashcards — with quick actions to add, edit, or view content.  
-
-**Book Details Page**  
-![Book Details Page](documentation/book-details.png)  
-Shows complete book information including title, author, description, and optional URL.  
-
-**Note Details Page**  
-![Note Details Page](documentation/note-details.png)  
-Displays the full content of a note with a clean layout and a “Go Back” button for navigation.  
-
----
-
-### Add and Edit Forms  
-
-**Add Book Page**  
-![Add Book Page](documentation/add-book.png)  
-Form for adding a new book with fields for title, author, description, and optional URL.  
-
-**Edit Book Page**  
-![Edit Book Page](documentation/edit-book.png)  
-Lets users update existing book details and confirm changes.  
-
-**Add Note Page**  
-![Add Note Page](documentation/add-note.png)  
-Form for writing a new note with an optional dropdown to link it to a specific book.  
-
-**Edit Note Page**  
-![Edit Note Page](documentation/edit-note.png)  
-Allows users to update note content and adjust related-book associations.  
-
----
-
-### App Map  
-
-![App Map](documentation/app-map.png)  
-Visual diagram showing the full navigation structure of StudyHelper — from authentication to dashboard and editing books and notes and adding books,notes, and creating flashcards.
-
----
-
-## User Stories  
-
-1. As a new user, I want to register an account so that I can securely store my study materials.  
-2. As a registered user, I want to log in so that I can access my personal dashboard.  
-3. As a user, I want to add books so that I can organize resources by subject.  
-4. As a user, I want to edit or mark books as favorites so that I can highlight important ones.  
-5. As a user, I want to write and link notes to books so that I can keep related information together.  
-6. As a user, I want to create flashcards so that I can review topics efficiently.  
-7. As a user, I want to edit and review notes and flashcards so that I can keep my content up to date.  
-
----
-## Research Topics  
-
-### 1. Passport.js Authentication (4 points)  
-**What it is:** A Node.js middleware that simplifies user authentication using modular strategies like `passport-local`.  
-**Why use it:** Provides secure login and session handling for StudyHelper, ensuring user data protection and smooth authentication flow.  
-**Possible candidate modules or solutions:**  
-- `passport`  
-- `passport-local`  
-- `express-session`  
-
----
-
-### 2. Mocha Testing (3 points)  
-**What it is:** A JavaScript testing framework for Node.js used to verify the correctness of backend logic and routes.  
-**Why use it:** Ensures reliability and prevents regressions by automating backend testing for routes and database operations.  
-**Possible candidate modules or solutions:**  
-- `mocha`  
-- `chai`  
-
----
-
-### 3. Client-Side Validation with JustValidate (4 points)  
-**What it is:** A lightweight and flexible JavaScript library for validating form inputs directly in the browser.  
-**Why use it:** Enhances user experience by catching input errors (like password mismatch, empty fields, or invalid emails) before sending data to the server.  
-
-**Possible candidate modules or solutions:**  
-- `just-validate`  
-- Custom event-based error rendering for inline feedback  
-
----
-
-### 4. ESLint (2 points)  
-**What it is:** A static code analysis tool that identifies and fixes code style and syntax issues in JavaScript projects.  
-**Why use it:** Maintains code consistency, readability, and prevents potential bugs by enforcing standard style rules across all source files.  
-**Possible candidate modules or solutions:**  
-- `eslint`  
-- `eslint-plugin-import`, `eslint-plugin-node`  
-
----
-
-**Total Points: 13**  
-(*React was originally planned but has been replaced with ESLint and JustValidate to better align with project scope and milestone progress.*)
-
----
-
-## [Link to Initial Main Project File](./src/app.mjs)  
-
-## [Link to app map and wireframe images Project File](/documentation/)  
+Those integration tests create users and study records, then drop that test database. They are skipped when `TEST_DSN` is not supplied. Frontend tests cover protected navigation, session restore/logout, registration feedback, quiz scoring, retries, and escaped text rendering.

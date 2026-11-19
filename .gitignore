@@ -1,3 +1,74 @@
-node_modules
-.DS_Store
+# Dependencies, build outputs, and caches
+node_modules/
+dist/
+build/
+coverage/
+.vite/
+.cache/
+.nyc_output/
+*.tsbuildinfo
+
+# Local environment and credentials
 .env
+.env.*
+!.env.example
+.envrc
+*.local
+*.local.*
+secrets/
+credentials/
+.aws/
+.ssh/
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+
+# Private local demo account, seed data, and its tests
+/backend/scripts/seed-demo.mjs
+/backend/test/seed-demo.test.mjs
+demo-data/
+.demo/
+
+# Local databases, uploads, exports, and backups
+/backend/data/
+/backend/uploads/
+/data/
+/uploads/
+/exports/
+/backups/
+/tmp/
+/temp/
+dump/
+*.bson
+*.dump
+*.archive
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+
+# Runtime and browser-test output
+*.log
+playwright-report/
+test-results/
+blob-report/
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS and local editor files
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.swo
+*~
