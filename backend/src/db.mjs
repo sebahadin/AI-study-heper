@@ -15,7 +15,19 @@ const userSchema = new mongoose.Schema({
     password: { type: String, required: true }
 });
 
+const courseSchema = new mongoose.Schema({
+    title: { type: String, required: true },
+    code: { type: String, default: '' },
+    term: { type: String, default: '' },
+    instructor: { type: String, default: '' },
+    description: { type: String, default: '' },
+    color: { type: String, enum: ['violet', 'blue', 'mint', 'peach', 'rose'], default: 'violet' },
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+}, { timestamps: true });
+const courseRefs = () => ({ type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Course' }], default: [] });
+
 const bookSchema = new mongoose.Schema({
+    courses: courseRefs(),
     title: { type: String, required: true },
     author: { type: String, required: true },
     category: { type: String, required: true },
@@ -28,6 +40,7 @@ const bookSchema = new mongoose.Schema({
 
 
 const noteSchema = new mongoose.Schema({
+    courses: courseRefs(),
 
     title: { type: String, required: true },
 
@@ -41,6 +54,7 @@ const noteSchema = new mongoose.Schema({
 
 
 const flashcardSchema = new mongoose.Schema({
+    courses: courseRefs(),
     question: { type: String, required: true },
     options: {
       type: [String],
@@ -57,8 +71,10 @@ const flashcardSchema = new mongoose.Schema({
 
 
 
+for (const schema of [bookSchema, noteSchema, flashcardSchema]) { schema.index({ user: 1, courses: 1 }); }
+const Course = mongoose.model('Course', courseSchema);
 const User = mongoose.model('User', userSchema);
 const Book = mongoose.model('Book', bookSchema);
 const Note = mongoose.model('Note', noteSchema);
 const Flashcard = mongoose.model('Flashcard', flashcardSchema);
-export { User, Book, Note, Flashcard };
+export { User, Course, Book, Note, Flashcard };

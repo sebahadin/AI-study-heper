@@ -1,11 +1,12 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import { Note, Book } from '../db.mjs';
+import { courseFields, materialCourseFilter, coursePopulation, bookPopulation } from '../course-materials.mjs';
 import { noteContentFields } from '../note-content.mjs';
 import { HttpError, requireAuth, text, validateId } from '../http.mjs';
 
 async function noteFields(body, userId, partial = false) {
-  const fields = noteContentFields(body, partial);
+  const fields = { ...noteContentFields(body, partial), ...await courseFields(body, userId, partial) };
   for (const key of ['title']) {
     if (!partial || Object.hasOwn(body || {}, key)) { fields[key] = text(body, key); }
   }
@@ -23,8 +24,8 @@ const router = express.Router();
 router.use(requireAuth);
 router.param('id', validateId);
 router.get('/', async (req, res) => {
-  const notes = await Note.find({ user: req.user._id }).sort({ createdAt: -1 })
-    .populate({ path: 'book', select: 'title', match: { user: req.user._id } }).lean();
+  const notes = await Note.find({ user: req.user._id, ...await materialCourseFilter('notes', req.query.course, req.user._id) }).sort({ createdAt: -1 })
+    .populate(coursePopulation(req.user._id)).populate(bookPopulation('book', req.user._id)).lean();
   res.json({ notes });
 });
 router.post('/', async (req, res) => {
@@ -33,7 +34,7 @@ router.post('/', async (req, res) => {
 });
 router.get('/:id', async (req, res) => {
   const note = await Note.findOne({ _id: req.params.id, user: req.user._id })
-    .populate({ path: 'book', select: 'title', match: { user: req.user._id } }).lean();
+    .populate(coursePopulation(req.user._id)).populate(bookPopulation('book', req.user._id)).lean();
   if (!note) { throw new HttpError(404, 'Note not found.'); }
   res.json({ note });
 });

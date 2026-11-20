@@ -1,4 +1,5 @@
 import express from 'express';
+import { courseFields, materialCourseFilter, coursePopulation } from '../course-materials.mjs';
 import { Book, Note, Flashcard } from '../db.mjs';
 import { HttpError, requireAuth, text, validateId } from '../http.mjs';
 
@@ -30,22 +31,22 @@ const router = express.Router();
 router.use(requireAuth);
 router.param('id', validateId);
 router.get('/', async (req, res) => {
-  const books = await Book.find({ user: req.user._id }).sort({ _id: -1 }).lean();
+  const books = await Book.find({ user: req.user._id, ...await materialCourseFilter('books', req.query.course, req.user._id) }).populate(coursePopulation(req.user._id)).sort({ _id: -1 }).lean();
   res.json({ books });
 });
 router.post('/', async (req, res) => {
-  const book = await Book.create({ ...bookFields(req.body), user: req.user._id });
+  const book = await Book.create({ ...bookFields(req.body), ...await courseFields(req.body, req.user._id), user: req.user._id });
   res.status(201).json({ book });
 });
 router.get('/:id', async (req, res) => {
-  const book = await Book.findOne({ _id: req.params.id, user: req.user._id }).lean();
+  const book = await Book.findOne({ _id: req.params.id, user: req.user._id }).populate(coursePopulation(req.user._id)).lean();
   if (!book) { throw new HttpError(404, 'Book not found.'); }
   res.json({ book });
 });
 router.patch('/:id', async (req, res) => {
   const book = await Book.findOneAndUpdate(
     { _id: req.params.id, user: req.user._id },
-    { $set: bookFields(req.body, true) },
+    { $set: { ...bookFields(req.body, true), ...await courseFields(req.body, req.user._id, true) } },
     { new: true, runValidators: true },
   );
   if (!book) { throw new HttpError(404, 'Book not found.'); }

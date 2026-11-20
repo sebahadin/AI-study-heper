@@ -10,6 +10,7 @@ import { connectDatabase } from './db.mjs';
 import { errorHandler } from './http.mjs';
 import authRoutes from './routes/auth.mjs';
 import dashboardRoutes from './routes/dashboard.mjs';
+import coursesRoutes from './routes/courses.mjs';
 import booksRoutes from './routes/books.mjs';
 import notesRoutes from './routes/notes.mjs';
 import flashcardsRoutes from './routes/flashcards.mjs';
@@ -44,6 +45,7 @@ export function createApp({ sessionStore, frontendDirectory } = {}) {
   app.use(passport.session());
   app.use('/api/auth', authRoutes);
   app.use('/api/dashboard', dashboardRoutes);
+  app.use('/api/courses', coursesRoutes);
   app.use('/api/books', booksRoutes);
   app.use('/api/notes', notesRoutes);
   app.use('/api/flashcards', flashcardsRoutes);

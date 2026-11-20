@@ -6,12 +6,12 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createApp } from '../src/app.mjs';
-import { User, Book, Note, Flashcard } from '../src/db.mjs';
+import { User, Course, Book, Note, Flashcard } from '../src/db.mjs';
 
 describe('HTTP boundaries without a database', () => {
   const app = createApp();
   it('returns JSON 401 responses for protected resources', async () => {
-    for (const endpoint of ['/api/auth/me', '/api/dashboard', '/api/books', '/api/notes', '/api/flashcards']) {
+    for (const endpoint of ['/api/auth/me', '/api/dashboard', '/api/courses', '/api/books', '/api/notes', '/api/flashcards']) {
       const response = await request(app).get(endpoint).expect(401).expect('Content-Type', /json/);
       expect(response.headers.location).to.equal(undefined);
     }
@@ -42,11 +42,11 @@ integration('MongoDB + Passport API integration (requires TEST_DSN)', () => {
     const uri = new URL(process.env.TEST_DSN);
     if (!uri.pathname.endsWith('_test')) { throw new Error('TEST_DSN must name a disposable database ending in _test.'); }
     await mongoose.connect(process.env.TEST_DSN);
-    await Promise.all([User.init(), Book.init(), Note.init(), Flashcard.init()]);
+    await Promise.all([User.init(), Course.init(), Book.init(), Note.init(), Flashcard.init()]);
     app = createApp();
   });
   beforeEach(async () => {
-    await Promise.all([User.deleteMany({}), Book.deleteMany({}), Note.deleteMany({}), Flashcard.deleteMany({})]);
+    await Promise.all([User.deleteMany({}), Course.deleteMany({}), Book.deleteMany({}), Note.deleteMany({}), Flashcard.deleteMany({})]);
     const password = await bcrypt.hash('password123', 4);
     const users = await User.create([{ username: 'alice', email: 'alice@example.com', password }, { username: 'bob', email: 'bob@example.com', password }]);
     aliceId = users[0]._id;
@@ -120,6 +120,93 @@ integration('MongoDB + Passport API integration (requires TEST_DSN)', () => {
     const dashboard = await alice.get('/api/dashboard').expect(200);
     expect(dashboard.body.notes[0].content).to.equal(plain.body.note.content);
   });
+  it('creates, edits and lists courses with safe ownership and validation', async () => {
+    const created = await alice.post('/api/courses').send({ title: 'Psychology', code: 'PSY 101', term: 'Fall 2026', color: 'mint', user: String(bobId) }).expect(201);
+    const id = created.body.course._id;
+    expect(created.body.course.user).to.equal(String(aliceId));
+    const list = await alice.get('/api/courses').expect(200);
+    expect(list.body.courses[0].counts).to.deep.equal({ books: 0, notes: 0, flashcards: 0 });
+    const updated = await alice.patch(`/api/courses/${id}`).send({ instructor: 'Dr. Example', title: 'Cognitive Psychology' }).expect(200);
+    expect(updated.body.course.instructor).to.equal('Dr. Example');
+    for (const method of ['get', 'patch', 'delete']) { await bob[method](`/api/courses/${id}`).send({ title: 'Not mine' }).expect(404); }
+    await alice.post('/api/courses').send({ title: 'Invalid color', color: 'unsafe' }).expect(400);
+    await alice.post('/api/courses').send({ title: ' ' }).expect(400);
+    await alice.get('/api/courses/not-an-id').expect(400);
+  });
+  it('shares materials across courses and includes notes and cards from related books without duplicates', async () => {
+    const [first, second] = await Course.create([{ title: 'First course', user: aliceId }, { title: 'Second course', user: aliceId }]);
+    const book = (await alice.post('/api/books').send({ ...bookBody, courses: [String(first._id), String(second._id)] }).expect(201)).body.book;
+    const note = (await alice.post('/api/notes').send({ title: 'Linked idea', contentHtml: '<p><strong>Remember</strong> this</p>', book: book._id, courses: [String(first._id)] }).expect(201)).body.note;
+    const card = (await alice.post('/api/flashcards').send({ question: 'Recall?', options: ['A', 'B'], correctIndex: 0, tags: [book._id], courses: [String(first._id)] }).expect(201)).body.flashcard;
+    const detail = await alice.get(`/api/courses/${first._id}`).expect(200);
+    expect(detail.body.books).to.have.length(1); expect(detail.body.notes).to.have.length(1); expect(detail.body.flashcards).to.have.length(1);
+    expect(detail.body.notes[0].book.courses).to.have.length(2);
+    const inherited = await alice.get(`/api/notes?course=${second._id}`).expect(200);
+    expect(inherited.body.notes[0]._id).to.equal(note._id);
+    expect(inherited.body.notes[0].contentHtml).to.include('<strong>Remember</strong>');
+    const cards = await alice.get(`/api/flashcards?course=${second._id}`).expect(200);
+    expect(cards.body.flashcards[0]._id).to.equal(card._id);
+    const summary = await alice.get('/api/courses').expect(200);
+    expect(summary.body.courses.find(course => course._id === String(first._id)).counts).to.deep.equal({ books: 1, notes: 1, flashcards: 1 });
+    await alice.patch(`/api/books/${book._id}`).send({ courses: [String(first._id)] }).expect(200);
+    expect((await alice.get(`/api/notes?course=${second._id}`)).body.notes).to.have.length(0);
+    expect((await alice.get(`/api/flashcards?course=${second._id}`)).body.flashcards).to.have.length(0);
+  });
+  it('allows course-only notes and flashcards and supports course quizzes without books', async () => {
+    const course = await Course.create({ title: 'Independent study', user: aliceId });
+    await alice.post('/api/notes').send({ title: 'Lecture notes', content: 'Important idea', courses: [String(course._id)] }).expect(201);
+    const created = await alice.post('/api/flashcards').send({ question: 'Which one?', options: ['A', 'B'], correctIndex: 1, tags: [], courses: [String(course._id)] }).expect(201);
+    expect(created.body.flashcard.tags).to.deep.equal([]);
+    const quiz = await alice.get(`/api/flashcards?course=${course._id}`).expect(200);
+    expect(quiz.body.flashcards).to.have.length(1);
+    const detail = await alice.get(`/api/courses/${course._id}`).expect(200);
+    expect(detail.body.books).to.have.length(0); expect(detail.body.notes).to.have.length(1);
+    await alice.patch(`/api/flashcards/${created.body.flashcard._id}`).send({ question: 'Edited question?' }).expect(200);
+    await alice.post('/api/flashcards').send({ question: 'No association?', options: ['A', 'B'], correctIndex: 0, tags: [], courses: [] }).expect(400);
+  });
+  it('validates all bulk assignments before changing membership and preserves other courses', async () => {
+    const [course, other, foreign] = await Course.create([{ title: 'Main', user: aliceId }, { title: 'Shared', user: aliceId }, { title: 'Private', user: bobId }]);
+    const [first, second, privateBook] = await Book.create([{ ...bookBody, user: aliceId, courses: [course._id, other._id] }, { ...bookBody, user: aliceId }, { ...bookBody, user: bobId }]);
+    await alice.patch(`/api/courses/${course._id}/materials`).send({ kind: 'books', ids: [String(second._id), String(privateBook._id)] }).expect(400);
+    expect((await Book.findById(first._id)).courses.map(String)).to.include(String(course._id));
+    await alice.patch(`/api/courses/${course._id}/materials`).send({ kind: 'books', ids: [String(second._id)] }).expect(204);
+    expect((await Book.findById(first._id)).courses.map(String)).to.deep.equal([String(other._id)]);
+    expect((await Book.findById(second._id)).courses.map(String)).to.deep.equal([String(course._id)]);
+    await alice.patch(`/api/courses/${foreign._id}/materials`).send({ kind: 'books', ids: [] }).expect(404);
+    await alice.patch(`/api/courses/${course._id}/materials`).send({ kind: '__proto__', ids: [] }).expect(400);
+    await alice.patch(`/api/courses/${course._id}/materials`).send({ kind: { toString: 'books' }, ids: [] }).expect(400);
+    await alice.post('/api/books').send({ ...bookBody, courses: [String(foreign._id)] }).expect(400);
+    await alice.post('/api/notes').send({ title: 'Wrong course', content: 'Private', courses: [String(foreign._id)] }).expect(400);
+    await alice.post('/api/flashcards').send({ question: 'Wrong?', options: ['A', 'B'], correctIndex: 0, courses: [String(foreign._id)] }).expect(400);
+    await alice.get(`/api/books?course=${foreign._id}`).expect(404);
+    await alice.get('/api/notes?course=invalid').expect(400);
+  });
+  it('removes only course associations while preserving materials and their other relationships', async () => {
+    const [course, other] = await Course.create([{ title: 'Remove me', user: aliceId }, { title: 'Keep me', user: aliceId }]);
+    const book = await Book.create({ ...bookBody, user: aliceId, courses: [course._id, other._id] });
+    const note = await Note.create({ title: 'Keep note', content: 'Keep content', user: aliceId, book: book._id, courses: [course._id, other._id] });
+    const card = await Flashcard.create({ question: 'Keep?', options: ['A', 'B'], correctIndex: 0, tags: [book._id], courses: [course._id, other._id], user: aliceId });
+    await alice.delete(`/api/courses/${course._id}`).expect(204);
+    await alice.get(`/api/courses/${course._id}`).expect(404);
+    expect((await Book.findById(book._id)).courses.map(String)).to.deep.equal([String(other._id)]);
+    const kept = await Note.findById(note._id);
+    expect(kept.content).to.equal('Keep content'); expect(String(kept.book)).to.equal(String(book._id));
+    expect(kept.courses.map(String)).to.deep.equal([String(other._id)]);
+    expect((await Flashcard.findById(card._id)).tags.map(String)).to.deep.equal([String(book._id)]);
+    const remaining = await alice.get(`/api/courses/${other._id}`).expect(200);
+    expect(remaining.body.notes).to.have.length(1); expect(remaining.body.flashcards).to.have.length(1);
+  });
+  it('keeps legacy materials without course fields available and allows organizing them later', async () => {
+    const course = await Course.create({ title: 'New organization', user: aliceId });
+    const inserted = await Book.collection.insertOne({ ...bookBody, user: aliceId });
+    const note = await Note.collection.insertOne({ title: 'Legacy', content: 'Original plain text', book: inserted.insertedId, user: aliceId });
+    expect((await alice.get('/api/books?course=none')).body.books).to.have.length(1);
+    expect((await alice.get('/api/notes?course=none')).body.notes).to.have.length(1);
+    await alice.patch(`/api/courses/${course._id}/materials`).send({ kind: 'books', ids: [String(inserted.insertedId)] }).expect(204);
+    expect((await alice.get('/api/notes?course=none')).body.notes).to.have.length(0);
+    expect((await alice.get(`/api/notes?course=${course._id}`)).body.notes[0]._id).to.equal(String(note.insertedId));
+    expect((await Note.findById(note.insertedId)).content).to.equal('Original plain text');
+  });
   it('supports flashcard editing, tag filtering, and deletion', async () => {
     const [book1, book2] = await Book.create([{ ...bookBody, user: aliceId }, { ...bookBody, title: 'Another book', user: aliceId }]);
     const body = { question: 'Which option is correct?', options: ['One', 'Two', '', 'Four'], correctIndex: 3, tags: [String(book1._id)] };
@@ -148,7 +235,7 @@ integration('MongoDB + Passport API integration (requires TEST_DSN)', () => {
     await alice.post('/api/flashcards').send({ question: 'Question?', options: ['Yes', 'No'], correctIndex: 0, tags: [String(book._id)] }).expect(400);
     expect(await Flashcard.exists({ _id: card._id })).not.to.equal(null);
     const dashboard = await alice.get('/api/dashboard').expect(200);
-    expect(dashboard.body).to.deep.equal({ books: [], notes: [], flashcardsCount: 0 });
+    expect(dashboard.body).to.deep.equal({ books: [], notes: [], flashcardsCount: 0, courses: [] });
   });
   it('unlinks notes and flashcard tags when deleting a book, preserving both', async () => {
     const book = await Book.create({ ...bookBody, user: aliceId, isFavorite: true });
