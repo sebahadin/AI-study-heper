@@ -18,5 +18,5 @@ class StructuredModel(Protocol):
 
 class EmbeddingModel(Protocol):
     async def embed(self, texts: Sequence[str]) -> tuple[tuple[float, ...], ...]:
-        """Use the same versioned model for indexing and query embeddings."""
+        """Use the same versioned local Hugging Face model for indexing and queries."""
         ...

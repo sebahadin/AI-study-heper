@@ -44,7 +44,7 @@ def test_trusted_context_is_immutable_including_nested_scope(source):
     {"max_pages": 20, "max_bytes": -1}, {"max_pages": True, "max_bytes": 1000},
     {"max_pages": "20", "max_bytes": 1000},
 ])
-def test_pdf_policy_requires_explicit_positive_integer_limits(limits):
+def test_pdf_policy_requires_positive_limits_and_explicit_bytes(limits):
     with pytest.raises(ValidationError):
         PdfLimits.model_validate(limits)
 
@@ -52,7 +52,7 @@ def test_pdf_policy_requires_explicit_positive_integer_limits(limits):
 def test_job_does_not_require_a_book():
     job = IngestionJob(
         job_id="job-1", document_id="pdf-1", source_version="v1",
-        storage_key="private/documents/file.pdf", limits=PdfLimits(max_pages=20, max_bytes=500000),
+        storage_key="private/documents/file.pdf", limits=PdfLimits(max_bytes=500000),
     )
     assert job.document_id == "pdf-1"
     assert "book_id" not in job.model_dump()

@@ -4,13 +4,14 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 
+from app.core.constants import MAX_PDF_PAGES
 from app.schemas.base import Contract, Count, PositiveCount, Text
 
 
 class PdfLimits(Contract):
-    """Deployment policy must choose both values; there is no implicit page cap."""
+    """Use the server page default; file-size policy still requires an explicit value."""
 
-    max_pages: PositiveCount
+    max_pages: PositiveCount = MAX_PDF_PAGES
     max_bytes: PositiveCount
 
 

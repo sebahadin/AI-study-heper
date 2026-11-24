@@ -5,8 +5,10 @@ from typing import Literal, Self
 
 from pydantic import model_validator
 
+from app.core.constants import DEFAULT_QUESTION_COUNT
 from app.schemas.base import Contract, PositiveCount, Text
 from app.schemas.evidence import Citation
+from app.schemas.questions import QuestionFormatPreference
 
 
 class SpecialistRole(StrEnum):
@@ -25,7 +27,8 @@ class TaskRequest(Contract):
     source_ids: tuple[Text, ...] = ()
     evidence_ids: tuple[Text, ...] = ()
     depends_on: tuple[Text, ...] = ()
-    question_count: PositiveCount | None = None
+    question_count: PositiveCount = DEFAULT_QUESTION_COUNT
+    format_preference: QuestionFormatPreference = "auto"
 
 
 class TaskResult(Contract):
