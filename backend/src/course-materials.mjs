@@ -4,7 +4,7 @@ import { HttpError } from './http.mjs';
 
 export const courseSelection = 'title code color';
 export const coursePopulation = user => ({ path: 'courses', select: courseSelection, match: { user } });
-export const bookPopulation = (path, user) => ({ path, select: 'title courses', match: { user }, populate: coursePopulation(user) });
+export const bookPopulation = (path, user) => ({ path, select: 'title courses color author category', match: { user }, populate: coursePopulation(user) });
 
 export async function ownedCourse(id, user) {
   if (!mongoose.isObjectIdOrHexString(id)) { throw new HttpError(400, 'Invalid course ID.'); }

@@ -27,6 +27,7 @@ const courseSchema = new mongoose.Schema({
 const courseRefs = () => ({ type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Course' }], default: [] });
 
 const bookSchema = new mongoose.Schema({
+    color: { type: String, default: null, validate: value => value === null || /^#[0-9a-f]{6}$/i.test(value) },
     courses: courseRefs(),
     title: { type: String, required: true },
     author: { type: String, required: true },

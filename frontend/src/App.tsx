@@ -9,6 +9,7 @@ import { BookDetail, BookEditor } from './pages/books/BookPages';
 import { BookList } from './pages/books/BookList';
 import { NoteList } from './pages/notes/NoteList';
 import { FlashcardEditor, FlashcardList } from './pages/flashcards/FlashcardPages';
+import { CourseList, CourseEditor, CourseDetail } from './pages/courses/CoursePages';
 import { QuizPage } from './pages/flashcards/QuizPage';
 
 const NoteDetail = lazy(() => import('./pages/notes/NotePages').then((module) => ({ default: module.NoteDetail })));
@@ -30,6 +31,10 @@ export default function App() {
     <Route path="register" element={<AuthPage key="register" register />} />
     <Route element={<ProtectedRoute />}>
       <Route path="dashboard" element={<Dashboard />} />
+      <Route path="courses" element={<CourseList />} />
+      <Route path="courses/add" element={<CourseEditor />} />
+      <Route path="courses/:id/edit" element={<CourseEditor />} />
+      <Route path="courses/:id" element={<CourseDetail />} />
       <Route path="books" element={<BookList />} />
       <Route path="books/add" element={<BookEditor />} />
       <Route path="books/:id/edit" element={<BookEditor />} />

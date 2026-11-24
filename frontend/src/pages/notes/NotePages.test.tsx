@@ -35,7 +35,7 @@ describe('note reading and editing', () => {
     expect(screen.getByText('Give your note a title.')).toBeVisible();
     expect(screen.getByText('Write something in your note before saving.')).toBeVisible();
     expect(screen.getByRole('textbox', { name: 'Note content' })).toHaveAttribute('aria-invalid', 'true');
-    expect(vi.mocked(fetch).mock.calls).toHaveLength(1);
+    expect(vi.mocked(fetch).mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true);
   });
   it('opens saved notes in read mode and provides a direct edit action', async () => {
     mount('/notes/note-one');

@@ -36,6 +36,20 @@ describe('quiz interactions', () => {
     await user.click(screen.getByRole('button', { name: 'Choose different tags' }));
     expect(screen.getByLabelText('Algorithms')).toBeChecked();
   });
+  it('starts a course quiz when there are no books', async () => {
+    vi.mocked(fetch).mockImplementation(async (input) => new Response(JSON.stringify(String(input) === '/api/books'
+      ? { books: [] } : String(input) === '/api/courses' ? { courses: [{ _id: 'course-one', title: 'Psychology' }] }
+      : { flashcards: [{ _id: 'course-card', question: 'Course-only question?', options: ['Right', 'Wrong'], correctIndex: 0, tags: [], courses: ['course-one'] }] }), { status: 200 }));
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/flashcards/quiz?course=course-one']}><QuizPage /></MemoryRouter>);
+    await screen.findByRole('option', { name: 'Psychology' });
+    expect(screen.getByRole('option', { name: 'Choose a course' })).toBeInTheDocument();
+    expect(screen.getByText('No related books. This quiz can use the course’s flashcards.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Start quiz' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Start quiz' }));
+    expect(await screen.findByRole('heading', { name: 'Course-only question?' })).toBeVisible();
+    expect(vi.mocked(fetch).mock.calls.some(([path]) => String(path) === '/api/flashcards?course=course-one')).toBe(true);
+  });
   it('shows a useful empty result when selected books have no questions', async () => {
     vi.mocked(fetch).mockImplementation(async (input) => new Response(JSON.stringify(String(input) === '/api/books'
       ? { books: [{ _id: 'book-one', title: 'Algorithms' }] } : { flashcards: [] }), { status: 200 }));

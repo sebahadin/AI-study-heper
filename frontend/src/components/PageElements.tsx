@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { bookInk, normalizeBookColor } from '../utils/bookColor';
+import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon, type IconName } from './Icon';
 import type { Book } from '../types';
@@ -14,5 +15,16 @@ export function SearchField({ label, value, onChange }: { label: string; value: 
 }
 export function BookCover({ book, compact = false }: { book: Book; compact?: boolean }) {
   const tone = [...book._id].reduce((sum, letter) => sum + letter.charCodeAt(0), 0) % 4;
-  return <div className={`book-cover book-cover--${tone}${compact ? ' book-cover--compact' : ''}`} aria-hidden="true"><span className="cover-category">{book.category}</span><span className="cover-art"><i /><i /><i /></span><strong>{book.title}</strong><span className="cover-author">{book.author}</span></div>;
+  const color = book.color ? normalizeBookColor(book.color) : null;
+  const style = color ? { '--cover-bg': color, '--cover-ink': bookInk(color) } as CSSProperties : undefined;
+  return <div style={style} className={`book-cover book-cover--${tone}${compact ? ' book-cover--compact' : ''}${color ? ' book-cover--custom' : ''}`} aria-hidden="true">
+    <span className="book-volume">
+      <span className="book-cover-back" />
+      <span className="book-cover-spine"><span>{book.title}</span></span>
+      <span className="book-page-edge book-page-edge--side" />
+      <span className="book-page-edge book-page-edge--top" />
+      <span className="book-page-edge book-page-edge--bottom" />
+      <span className="book-cover-front"><span className="cover-category">{book.category}</span><span className="cover-art"><i /><i /><i /></span><strong>{book.title}</strong><span className="cover-author">{book.author}</span></span>
+    </span>
+  </div>;
 }

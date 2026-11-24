@@ -1,4 +1,5 @@
 import express from 'express';
+import { noteConnections } from '../material-connections.mjs';
 import mongoose from 'mongoose';
 import { Note, Book } from '../db.mjs';
 import { courseFields, materialCourseFilter, coursePopulation, bookPopulation } from '../course-materials.mjs';
@@ -36,7 +37,8 @@ router.get('/:id', async (req, res) => {
   const note = await Note.findOne({ _id: req.params.id, user: req.user._id })
     .populate(coursePopulation(req.user._id)).populate(bookPopulation('book', req.user._id)).lean();
   if (!note) { throw new HttpError(404, 'Note not found.'); }
-  res.json({ note });
+  const related = await noteConnections(note, req.user._id);
+  res.json({ note, related });
 });
 router.patch('/:id', async (req, res) => {
   const note = await Note.findOneAndUpdate(

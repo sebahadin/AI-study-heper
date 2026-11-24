@@ -38,7 +38,7 @@ describe('organized collections', () => {
     const user = userEvent.setup();
     render(<MemoryRouter><NoteList /></MemoryRouter>);
     await screen.findByRole('heading', { name: 'Closure practice' });
-    expect(screen.getByRole('link', { name: 'Add note' })).toHaveAttribute('href', '/notes/add');
+    expect(screen.getByRole('link', { name: 'Write a note' })).toHaveAttribute('href', '/notes/add');
     await user.type(screen.getByRole('searchbox', { name: 'Search notes' }), 'lexical');
     expect(screen.getByRole('heading', { name: 'Closure practice' })).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'Weekly ideas' })).toBeNull();
@@ -54,8 +54,8 @@ describe('organized collections', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'Filter flashcards by book' }), 'book-one');
     expect(screen.queryByRole('heading', { name: 'How do you review?' })).toBeNull();
     const card = screen.getByRole('article');
-    await user.click(within(card).getByText('Reveal answer'));
-    expect(within(card).getByText('Lexical scope')).toBeVisible();
+    await user.click(within(card).getByRole('button', { name: 'Reveal answer: What is a closure?' }));
+    expect(within(card).getByRole('region', { name: 'Correct answer' })).toHaveTextContent('Lexical scope');
   });
   it('lets people recover from an empty search result', async () => {
     const user = userEvent.setup();

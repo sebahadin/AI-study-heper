@@ -1,0 +1,114 @@
+:root { --surface-inset:#101420; --surface-raised:#222637; --sidebar-bg:#10131e; --primary-wash:#b6a3ff0c; --on-primary:#211932; --primary-hover:#c6b6ff; --success-wash:#91d6b90c; --danger-wash:#f099a90d; --shadow:#0003; }
+:root[data-theme='light'] { --bg:#f4f4f8; --surface:#ffffff; --surface-alt:#efedf5; --surface-inset:#f8f7fb; --surface-raised:#ece8f4; --sidebar-bg:#faf9fc; --border:#dcdce7; --text:#282d3e; --muted:#646b7e; --primary:#7052a1; --accent:#7052a1; --on-primary:#ffffff; --primary-hover:#61418f; --primary-wash:#8058b10a; --success:#2d7458; --success-wash:#2d74580b; --danger:#aa3858; --danger-wash:#aa385809; --shadow:#33334a15; }
+:root[data-theme='forest'] { --bg:#0d1916; --surface:#14251e; --surface-alt:#1a2d25; --surface-inset:#101f19; --surface-raised:#243c30; --sidebar-bg:#101f19; --border:#2c4438; --text:#e4eee6; --muted:#9aafa0; --primary:#b2d8ad; --accent:#b2d8ad; --on-primary:#182d20; --primary-hover:#c6e7be; --primary-wash:#b2d8ad0c; --success:#a4d7c1; --success-wash:#a4d7c10c; --danger:#f1a4af; --danger-wash:#f1a4af0b; --shadow:#0003; }
+html { color:var(--text); background:var(--bg); scrollbar-color:var(--border) var(--bg); }
+body { color:var(--text); background:var(--bg); }
+:root[data-theme='light'] ::selection { background:#d8c9ef; color:#30243e; }
+:root[data-theme='forest'] ::selection { background:#406f4b; color:#f0fff0; }
+:root .sidebar, :root .mobile-navigation { background:var(--sidebar-bg); border-color:var(--border); }
+:root .workspace-topbar { background:color-mix(in srgb,var(--bg) 94%,transparent); border-color:var(--border); }
+:root .sidebar-account, :root .note-row, :root .note-card-footer, :root .form-container > .actions, :root .flashcard > .card-actions, :root .note-course-organization, :root .course-inheritance, :root .course-card > footer, :root .course-tabs, :root .review-dialog-header, :root .format-group, :root .note-link-panel, :root .course-material-options, :root .course-material-choice, :root .course-manager-dialog .modal-actions, :root .note-toolbar-shell, :root .quiz-course-selector, :root .study-overview-strip.stats-grid, :root .study-overview-strip .stat-card { border-color:var(--border); }
+:root .nav-item, :root .motion-toggle, :root .icon-button, :root .breadcrumb-parent, :root .breadcrumb-current, :root .sidebar-account > div > span, :root .nav-caption, :root .workspace-footer, :root .eyebrow, :root .hero-eyebrow, :root .hero-copy > p, :root .stat-card > div > span, :root .note-row p, :root .note-word-count, :root .bookshelf-item > p, :root .practice-panel p, :root .collection-count, :root .filter-select select, :root .collection-search, :root .note-card .note-preview, :root .study-note-card .note-preview, :root .note-card-footer, :root .study-book-card .study-book-author, :root .study-book-card .study-book-description, :root .study-note-link, :root .study-flashcard-label, :root .study-practice-banner p, :root .study-course-welcome, :root .course-intro p, :root .course-card-description, :root .course-card-counts, :root .course-hero-meta, :root .course-hero-copy > p, :root .course-material-card > p, :root .course-material-card-top, :root .course-empty-material p, :root .course-no-results, :root .course-footnote, :root .course-manager-dialog form > p, :root .course-material-choice small, :root .remove-explanation, :root .course-picker > p, :root .course-choice > span, :root .course-inheritance > span, :root .note-course-organization, :root .note-course-organization > summary > span, :root .quiz-course-selector p, :root .review-session-meta, :root .review-session-footer > span, :root .review-finish p, :root .flashcard-review-dialog .review-keyboard-hint, :root .empty-state p, :root .loading-state, :root dialog > p, :root .field > label, :root .tag-fieldset legend, :root .editor-meta, :root .tag-checkbox, :root .quiz-hud, :root .missed-list li div, :root .back-link, :root .auth-header-right, :root .auth-story > p, :root .auth-subtitle, :root .auth-footer, :root .note-back-link, :root .note-contextbar, :root .note-context-hint, :root .note-bottom-bar, :root .note-mode-switch > *, :root .detail-subtitle, :root .detail-grid dt { color:var(--muted); }
+:root .breadcrumb-current, :root .course-card-counts strong, :root .field > label, :root .note-course-organization, :root .course-choice:has(input:checked) > span, :root .action-menu-item, :root .detail-grid dd, :root .detail-body p { color:var(--text); }
+:root .nav-item:hover, :root .icon-button:hover { color:var(--text); background:var(--primary-wash); }
+:root .nav-item.is-active { color:var(--primary); border-color:var(--primary-wash); background:linear-gradient(95deg,var(--primary-wash),transparent); }
+:root .nav-item.is-active::before { background:var(--primary); }
+:root .sidebar-compose { color:var(--primary); border-color:color-mix(in srgb,var(--primary) 22%,transparent); background:var(--primary-wash); }
+:root .avatar { color:var(--primary); background:var(--surface-raised); }
+:root .logout-button:hover { color:var(--danger); }
+:root .btn.primary, :root .add-btn, :root .practice-button { color:var(--on-primary); background:var(--primary); box-shadow:0 3px 12px var(--shadow); }
+:root .btn.primary:hover, :root .add-btn:hover, :root .practice-button:hover { color:var(--on-primary); background:var(--primary-hover); }
+:root .btn.secondary, :root .details-btn, :root .create-menu .create-trigger { color:var(--text); background:var(--surface-raised); border-color:var(--border); }
+:root .btn.secondary:hover, :root .details-btn:hover, :root .create-menu .create-trigger:hover { background:color-mix(in srgb,var(--primary) 12%,var(--surface)); border-color:var(--primary); }
+:root .btn.ghost { color:var(--primary); }
+:root .btn.danger, :root .remove-btn { color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%,transparent); background:var(--danger-wash); }
+:root .text-link, :root .study-secondary-action, :root .study-open-link, :root .category-label, :root .study-book-card .study-feature-label, :root .practice-icon, :root .auth-story h1 em, :root .study-practice-banner .eyebrow, :root .review-dialog-header .eyebrow, :root .review-shuffle, :root .note-row-icon, :root .course-intro-icon, :root .course-material-card-top svg, :root .empty-state-icon, :root .results-icon, :root .missed-list em, :root .note-bottom-bar a, :root .course-back-link, :root .note-row:hover h4 { color:var(--primary); }
+:root .text-link:hover, :root .study-secondary-action:hover, :root .study-open-link:hover, :root .study-note-link:hover { color:var(--primary); text-decoration:underline; text-underline-offset:4px; }
+:root button.text-link { border:0; background:transparent; padding:4px 0; }
+:root .more-actions-button { color:var(--muted); }
+:root .more-actions-button:hover, :root .more-actions-button[aria-expanded='true'] { color:var(--primary); background:var(--primary-wash); border-color:var(--border); }
+:root .study-card-options .more-actions-button { color:var(--text); background:color-mix(in srgb,var(--surface) 94%,transparent); border-color:var(--border); }
+:root .study-course-options .more-actions-button { color:var(--muted); }
+:root .create-menu-panel, :root .action-menu-panel { background:var(--surface); border-color:var(--border); color:var(--text); box-shadow:0 14px 50px var(--shadow); }
+:root .create-menu-panel a, :root .action-menu-item { color:var(--text); }
+:root .action-menu-item svg { color:var(--primary); }
+:root .create-menu-panel a:hover, :root .action-menu-item:hover, :root .action-menu-item:focus { background:var(--primary-wash); color:var(--primary); }
+:root .action-menu-item.is-danger, :root .action-menu-item.is-danger svg { color:var(--danger); border-color:var(--border); }
+:root .action-menu-item.is-danger:hover, :root .action-menu-item.is-danger:focus { background:var(--danger-wash); }
+:root .stat-card, :root .collection-search, :root .filter-select select, :root .course-card, :root .course-summary-item, :root .question-box, :root .result-box, :root .note-workspace, :root .flashcard-review-dialog, :root .tag-checkbox, :root .course-choice, :root .missed-list li { background-color:var(--surface); border-color:var(--border); }
+:root .stat-icon, :root .course-section-count, :root .empty-state-icon, :root .note-row-icon, :root .course-intro-icon, :root .results-icon { color:var(--primary); background:var(--primary-wash); border-color:var(--border); }
+:root .stat-card--mint .stat-icon, :root .stat-icon--flashcards { color:var(--success); }
+:root .course-material-card, :root .study-course-materials .course-material-card { background:var(--surface-inset); border-color:var(--border); }
+:root .study-note-card { border-top-color:color-mix(in srgb,var(--primary) 40%,var(--border)); background:linear-gradient(145deg,var(--primary-wash),transparent 65%),var(--surface); }
+:root .study-book-card--featured { background:linear-gradient(120deg,var(--primary-wash),transparent 75%),var(--surface); }
+:root .study-book-card--featured .book-card-cover { background:var(--primary-wash); }
+:root .study-overview-strip .stat-card, :root .study-overview-strip.stats-grid { background:transparent; }
+:root .welcome-hero { background:radial-gradient(ellipse at 90% 65%,var(--primary-wash),transparent 60%),linear-gradient(100deg,var(--surface-raised),var(--surface)); border-color:var(--border); }
+:root .hero-copy h3 { color:var(--text); }
+:root .practice-panel, :root .study-practice-banner { background:radial-gradient(ellipse at 100% 100%,var(--primary-wash),transparent 70%),var(--surface); border-color:var(--border); }
+:root .course-intro { background:linear-gradient(110deg,var(--primary-wash),transparent),var(--surface); border-color:var(--border); }
+:root .course-hero { background:linear-gradient(110deg,rgba(var(--course-rgb),.1),transparent 75%),var(--surface); }
+:root .course-hero-meta > span, :root .course-card > footer { background:var(--surface-inset); }
+:root .course-tabs a { color:var(--muted); }
+:root .course-tabs a[aria-current] { color:var(--primary); }
+:root .course-summary-item > span:last-child { color:var(--muted); }
+:root .course-color-choice, :root .course-picker, :root .course-choice { border-color:var(--border); }
+:root .course-empty-material > span { color:var(--primary); background:var(--primary-wash); }
+:root .course-manager-dialog .modal-actions { background:var(--surface); }
+:root .course-material-choice > input, :root .tag-checkbox input { accent-color:var(--primary); }
+:root .form-container input:not([type='checkbox']):not([type='color']):not([type='radio']), :root .form-container textarea, :root .form-container select, :root .note-contextbar select, :root .note-link-panel input { color:var(--text); background-color:var(--surface-inset); border-color:var(--border); }
+:root .form-container input:focus, :root .form-container textarea:focus, :root .form-container select:focus { border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-wash); }
+:root .form-container input::placeholder, :root .form-container textarea::placeholder, :root .collection-search input::placeholder { color:var(--muted); }
+:root .form-error { color:var(--danger); }
+:root .tag { color:var(--primary); background:var(--primary-wash); border-color:color-mix(in srgb,var(--primary) 20%,transparent); }
+:root .tag--muted { color:var(--muted); background:var(--surface-inset); border-color:var(--border); }
+:root .tag-checkbox:has(input:checked) { color:var(--primary); border-color:var(--primary); background:var(--primary-wash); }
+:root .error-message { color:var(--danger); background:var(--danger-wash); border-color:color-mix(in srgb,var(--danger) 30%,transparent); }
+:root .success-message { color:var(--success); background:var(--success-wash); border-color:color-mix(in srgb,var(--success) 30%,transparent); }
+:root dialog { background:var(--surface); border-color:var(--border); }
+:root .note-mode-switch { background:var(--surface-inset); border-color:var(--border); }
+:root .note-mode-switch > [aria-pressed='true'], :root .note-mode-switch > [aria-current='page'] { background:var(--surface-raised); color:var(--primary); }
+:root .note-toolbar-shell { background:color-mix(in srgb,var(--surface-raised) 96%,transparent); }
+:root .note-toolbar select, :root .format-button, :root .format-color { color:var(--text); }
+:root .note-toolbar select:hover, :root .format-button:hover, :root .format-color:hover { background-color:var(--surface); border-color:var(--border); }
+:root .format-button.is-active { background:color-mix(in srgb,var(--primary) 18%,var(--surface)); color:var(--primary); }
+:root .note-toolbar option { color:var(--text); background:var(--surface); }
+:root .note-save-status { color:var(--success); }
+:root .note-save-status.is-unsaved { color:var(--muted); }
+:root .note-canvas { background:radial-gradient(ellipse at 50% 0%,var(--primary-wash),transparent 80%); }
+/* User formatting and paper keep their ink in every theme. */
+:root .note-paper { color:#252a38; background:#fffefb; box-shadow:0 2px 3px #0001,0 18px 60px var(--shadow); }
+:root .review-position, :root .quiz-progress { accent-color:var(--primary); background:var(--border); }
+:root .review-position::-webkit-progress-bar, :root .quiz-progress::-webkit-progress-bar { background:var(--border); }
+:root .review-position::-webkit-progress-value, :root .quiz-progress::-webkit-progress-value { background:var(--primary); }
+:root .review-position::-moz-progress-bar, :root .quiz-progress::-moz-progress-bar { background:var(--primary); }
+:root .options-list button { color:var(--text); background:var(--surface-inset); border-color:var(--border); }
+:root .options-list button:not(:disabled):hover { background:var(--primary-wash); border-color:var(--primary); }
+:root .options-list button.correct { color:var(--success); background:var(--success-wash); border-color:var(--success); }
+:root .options-list button.incorrect { color:var(--danger); background:var(--danger-wash); border-color:var(--danger); }
+:root .answer-correct { color:var(--success); }
+:root .answer-incorrect { color:var(--danger); }
+:root[data-theme='light'] .course-tone--violet { --course-color:#7754a2; --course-rgb:119,84,162; }
+:root[data-theme='light'] .course-tone--blue { --course-color:#386ca1; --course-rgb:56,108,161; }
+:root[data-theme='light'] .course-tone--mint { --course-color:#287355; --course-rgb:40,115,85; }
+:root[data-theme='light'] .course-tone--peach { --course-color:#965527; --course-rgb:150,85,39; }
+:root[data-theme='light'] .course-tone--rose { --course-color:#a14b6d; --course-rgb:161,75,109; }
+:root[data-theme='light'] .flashcard-flip-face { color:var(--text); background:radial-gradient(ellipse at 100% 0%,#8e61be0a,transparent 75%),#faf8ff; border-color:#d5c9e7; box-shadow:inset 0 1px 0 #fff,0 5px 14px #40305009; }
+:root[data-theme='light'] .flashcard-flip-back { background:radial-gradient(ellipse at 0% 100%,#70ad8e0b,transparent 80%),#f2faf5; border-color:#b9d9c7; }
+:root[data-theme='light'] .flashcard-flip .flashcard-flip-question { color:#39294b; }
+:root[data-theme='light'] .flashcard-flip .flashcard-flip-answer { color:#25543c; }
+:root[data-theme='light'] .flashcard-flip-face-heading, :root[data-theme='light'] .flashcard-flip-hint { color:#755195; }
+:root[data-theme='light'] .flashcard-flip-back .flashcard-flip-face-heading, :root[data-theme='light'] .flashcard-flip-back .flashcard-flip-hint { color:#396f51; }
+:root[data-theme='light'] .review-finish-icon { color:var(--success); background:var(--success-wash); border-color:#91d6b9; }
+:root[data-theme='light'] .auth-form-panel { background:var(--surface); border-color:var(--border); }
+:root[data-theme='forest'] .flashcard-flip-face { background:radial-gradient(ellipse at 100% 0%,#abd6ad0c,transparent 75%),#1c3026; border-color:#415a49; }
+:root[data-theme='forest'] .flashcard-flip-back { background:radial-gradient(ellipse at 0% 100%,#7ac9ae17,transparent 80%),#162e27; border-color:#426456; }
+:root[data-theme='forest'] .flashcard-flip-face-heading, :root[data-theme='forest'] .flashcard-flip-hint { color:#bedab6; }
+:root[data-theme='forest'] .flashcard-flip .flashcard-flip-question { color:#ebf2e9; }
+:root[data-theme='forest'] .brand-symbol { color:#1a3023; background:linear-gradient(150deg,#c4e6b9,#8cbd94); }
+:root[data-theme='forest'] .ambient-background > div { background:#71bd79; }
+@media (max-width:620px) { .study-overview-strip .stat-card:nth-child(odd) { border-color:var(--border); } }
+:root .auth-card { background:linear-gradient(150deg,var(--surface-alt),var(--surface)); border-color:var(--border); box-shadow:0 25px 80px var(--shadow); }
+:root .auth-form-heading p, :root .auth-benefits > span, :root .auth-alternate, :root .auth-fine-print { color:var(--muted); }
+:root .auth-story > .eyebrow, :root .auth-benefits svg, :root .auth-welcome-icon, :root .auth-alternate a { color:var(--primary); }
+:root .auth-welcome-icon { background:var(--primary-wash); border-color:var(--border); }

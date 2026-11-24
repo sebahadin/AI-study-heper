@@ -1,4 +1,5 @@
 import express from 'express';
+import { materialConnections } from '../material-connections.mjs';
 import { courseFields, materialCourseFilter, coursePopulation } from '../course-materials.mjs';
 import { Book, Note, Flashcard } from '../db.mjs';
 import { HttpError, requireAuth, text, validateId } from '../http.mjs';
@@ -18,6 +19,13 @@ function bookFields(body, partial = false) {
     if (!partial || Object.hasOwn(body || {}, key)) {
       fields[key] = text(body, key, ['title', 'author', 'category'].includes(key));
     }
+  }
+  if (Object.hasOwn(body || {}, 'color')) {
+    if (body.color === null || body.color === '') { fields.color = null; }
+    else if (typeof body.color === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(body.color.trim())) {
+      const color = body.color.trim().toLowerCase();
+      fields.color = color.length === 4 ? '#' + [...color.slice(1)].map(char => char + char).join('') : color;
+    } else { throw new HttpError(400, 'Check the highlighted fields.', { color: 'Choose a color or enter a hex value such as #7955aa.' }); }
   }
   if (fields.url) {
     let valid = false;
@@ -41,7 +49,8 @@ router.post('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const book = await Book.findOne({ _id: req.params.id, user: req.user._id }).populate(coursePopulation(req.user._id)).lean();
   if (!book) { throw new HttpError(404, 'Book not found.'); }
-  res.json({ book });
+  const related = await materialConnections({ user: req.user._id, book });
+  res.json({ book, related });
 });
 router.patch('/:id', async (req, res) => {
   const book = await Book.findOneAndUpdate(
