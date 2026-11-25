@@ -3,8 +3,10 @@
 from pathlib import Path
 import re
 
-from pydantic import SecretStr, field_validator
+from pydantic import PositiveInt, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.core.constants import DEFAULT_MAX_PDF_BYTES
 
 ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
@@ -27,6 +29,7 @@ class Settings(BaseSettings):
     )
 
     service_token: SecretStr
+    max_pdf_bytes: PositiveInt = DEFAULT_MAX_PDF_BYTES
 
     @field_validator("service_token")
     @classmethod

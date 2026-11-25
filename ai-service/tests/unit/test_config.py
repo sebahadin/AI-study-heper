@@ -15,6 +15,7 @@ ENV_TOKEN = "test-environment-token-" + "y" * 32
 @pytest.fixture(autouse=True)
 def isolate_service_environment(monkeypatch):
     monkeypatch.delenv("AI_SERVICE_TOKEN", raising=False)
+    monkeypatch.delenv("AI_MAX_PDF_BYTES", raising=False)
 
 
 def test_default_dotenv_path_is_anchored_to_repository_not_working_directory():
@@ -29,7 +30,7 @@ def test_only_service_settings_are_loaded_from_a_shared_dotenv(tmp_path):
     )
     settings = Settings(_env_file=env_file)
     assert settings.service_token.get_secret_value() == FILE_TOKEN
-    assert set(type(settings).model_fields) == {"service_token"}
+    assert set(type(settings).model_fields) == {"service_token", "max_pdf_bytes"}
     assert "test-private-key" not in repr(settings)
 
 
@@ -38,6 +39,11 @@ def test_environment_overrides_the_shared_dotenv(tmp_path, monkeypatch):
     env_file.write_text(f"AI_SERVICE_TOKEN={FILE_TOKEN}\n")
     monkeypatch.setenv("AI_SERVICE_TOKEN", ENV_TOKEN)
     assert Settings(_env_file=env_file).service_token.get_secret_value() == ENV_TOKEN
+
+
+def test_server_pdf_size_policy_can_be_configured_in_the_environment(monkeypatch):
+    monkeypatch.setenv("AI_MAX_PDF_BYTES", "5242880")
+    assert Settings(_env_file=None, service_token=FILE_TOKEN).max_pdf_bytes == 5242880
 
 
 def test_missing_token_fails_closed():

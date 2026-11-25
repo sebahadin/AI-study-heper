@@ -2,19 +2,23 @@
 
 from fastapi import FastAPI
 
+from app.api.documents import router as documents_router
 from app.api.health import internal_router, router
 from app.core.config import Settings
 from app.core.errors import install_error_handlers
 from app.core.request_ids import RequestIdMiddleware
+from app.rag.ingestion.pdf_validation import configure_pdf_logging
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     # A missing/invalid token aborts startup; there is no insecure default.
     settings = settings if settings is not None else Settings()
+    configure_pdf_logging()
     app = FastAPI(title="Classmate AI internal API", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.settings = settings
     app.add_middleware(RequestIdMiddleware)
     install_error_handlers(app)
     app.include_router(router)
     app.include_router(internal_router)
+    app.include_router(documents_router)
     return app
