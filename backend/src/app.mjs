@@ -14,8 +14,9 @@ import coursesRoutes from './routes/courses.mjs';
 import booksRoutes from './routes/books.mjs';
 import notesRoutes from './routes/notes.mjs';
 import flashcardsRoutes from './routes/flashcards.mjs';
+import { createDocumentsRouter } from './routes/documents.mjs';
 
-export function createApp({ sessionStore, frontendDirectory } = {}) {
+export function createApp({ sessionStore, frontendDirectory, documentService } = {}) {
   const app = express();
   app.disable('x-powered-by');
   if (settings.production) {
@@ -49,6 +50,7 @@ export function createApp({ sessionStore, frontendDirectory } = {}) {
   app.use('/api/books', booksRoutes);
   app.use('/api/notes', notesRoutes);
   app.use('/api/flashcards', flashcardsRoutes);
+  app.use('/api/documents', createDocumentsRouter(documentService));
   app.use('/api', (_req, res) => res.status(404).json({ error: 'API endpoint not found.' }));
 
   const frontend = frontendDirectory || fileURLToPath(new URL('../../frontend/dist/', import.meta.url));

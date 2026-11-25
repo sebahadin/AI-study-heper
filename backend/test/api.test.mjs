@@ -11,7 +11,7 @@ import { User, Course, Book, Note, Flashcard } from '../src/db.mjs';
 describe('HTTP boundaries without a database', () => {
   const app = createApp();
   it('returns JSON 401 responses for protected resources', async () => {
-    for (const endpoint of ['/api/auth/me', '/api/dashboard', '/api/courses', '/api/books', '/api/notes', '/api/flashcards']) {
+    for (const endpoint of ['/api/auth/me', '/api/dashboard', '/api/courses', '/api/books', '/api/notes', '/api/flashcards', '/api/documents', '/api/documents/policy']) {
       const response = await request(app).get(endpoint).expect(401).expect('Content-Type', /json/);
       expect(response.headers.location).to.equal(undefined);
     }

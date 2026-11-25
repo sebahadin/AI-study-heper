@@ -78,4 +78,30 @@ const User = mongoose.model('User', userSchema);
 const Book = mongoose.model('Book', bookSchema);
 const Note = mongoose.model('Note', noteSchema);
 const Flashcard = mongoose.model('Flashcard', flashcardSchema);
-export { User, Course, Book, Note, Flashcard };
+
+const documentSchema = new mongoose.Schema({
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    title: { type: String, required: true, maxlength: 200 },
+    filename: { type: String, required: true, maxlength: 255 },
+    courses: courseRefs(),
+    book: { type: mongoose.Schema.Types.ObjectId, ref: 'Book', default: null },
+    note: { type: mongoose.Schema.Types.ObjectId, ref: 'Note', default: null },
+    status: { type: String, enum: ['awaiting_upload', 'validating', 'uploaded', 'failed'], required: true },
+    expectedBytes: { type: Number, required: true, min: 1, validate: Number.isSafeInteger },
+    maxBytes: { type: Number, required: true, min: 1, validate: Number.isSafeInteger },
+    uploadKey: { type: String, required: true },
+    uploadExpiresAt: { type: Date, required: true },
+    finalizeUntil: { type: Date, required: true },
+    validationToken: { type: String, default: null },
+    validationLeaseUntil: { type: Date, default: null },
+    objectKey: { type: String, default: null },
+    sourceVersion: { type: String, default: null },
+    pageCount: { type: Number, min: 1, validate: Number.isSafeInteger },
+    byteCount: { type: Number, min: 1, validate: Number.isSafeInteger },
+    sha256: { type: String, match: /^[0-9a-f]{64}$/ },
+    error: { type: new mongoose.Schema({ code: String, message: String }, { _id: false }), default: null },
+}, { timestamps: true });
+documentSchema.index({ user: 1, createdAt: -1 });
+documentSchema.index({ user: 1, courses: 1 });
+const Document = mongoose.model('Document', documentSchema);
+export { User, Course, Book, Note, Flashcard, Document };
