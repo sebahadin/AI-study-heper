@@ -72,3 +72,11 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Local planning and implementation notes
+plans.md
+/ai-service/ROADMAP.md
+/ai-service/README.md
+/local-notes/
+**/IMPLEMENTATION*.md
+**/implementation*.md
