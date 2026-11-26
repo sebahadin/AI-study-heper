@@ -53,6 +53,7 @@ integration('Document uploads with MongoDB and Passport (requires TEST_DSN)', ()
         return Buffer.from(object);
       },
       async putValidated(key, data) { this.objects.set(key, Buffer.from(data)); this.puts.push(key); },
+      async signDownload(key) { return `https://read.example/${encodeURIComponent(key)}?signature=test-only`; },
       async remove(key) { this.objects.delete(key); this.removals.push(key); },
     };
     inspector = {
@@ -248,6 +249,84 @@ integration('Document uploads with MongoDB and Passport (requires TEST_DSN)', ()
     now = new Date(now.getTime() + 21 * 60 * 1000);
     const response = await alice.post(`/api/documents/${result.document._id}/complete`).send({}).expect(410);
     expect(response.body.code).to.equal('upload_expired');
+  });
+
+  it('returns only current owned material metadata for upload choices', async () => {
+    await Course.create([{ title: 'Owned course', user: aliceId }, { title: 'Private course', user: bobId }]);
+    await Note.create([{ title: 'Owned note', content: 'private-text-not-needed-by-the-picker', user: aliceId }, { title: 'Foreign note', content: 'Private', user: bobId }]);
+    const result = (await alice.get('/api/documents/options').expect(200)).body;
+    expect(result.courses.map(item => item.title)).to.deep.equal(['Owned course']);
+    expect(result.notes.map(item => item.title)).to.deep.equal(['Owned note']);
+    expect(result.notes[0]).not.to.have.any.keys('content', 'contentHtml', 'user');
+  });
+
+  it('filters by course, book and note including inherited links and rejects foreign scopes', async () => {
+    const course = await Course.create({ title: 'Biology', user: aliceId });
+    const foreign = await Course.create({ title: 'Foreign', user: bobId });
+    const book = await Book.create({ title: 'Textbook', author: 'Author', category: 'Biology', user: aliceId, courses: [course._id] });
+    const note = await Note.create({ title: 'Lecture', content: 'Idea', user: aliceId, book: book._id });
+    const connected = await begin({ note: String(note._id), title: 'Cells [draft]' });
+    await begin({ title: 'Independent handout' });
+    for (const filter of [`course=${course._id}`, `book=${book._id}`, `note=${note._id}`, 'q=%5Bdraft%5D']) {
+      const result = await alice.get(`/api/documents?${filter}`).expect(200);
+      expect(result.body.documents.map(item => item._id)).to.deep.equal([connected.document._id]);
+    }
+    await alice.get(`/api/documents?course=${foreign._id}`).expect(404);
+    await alice.get('/api/documents?course=invalid').expect(400);
+    expect((await alice.get('/api/documents?q=.*').expect(200)).body.documents).to.deep.equal([]);
+    await alice.get('/api/documents?status=unknown').expect(400);
+  });
+
+  it('issues read links only for an owned saved PDF', async () => {
+    const result = await begin();
+    await alice.get(`/api/documents/${result.document._id}/file`).expect(409);
+    await upload(result.document._id);
+    await alice.post(`/api/documents/${result.document._id}/complete`).send({}).expect(200);
+    await bob.get(`/api/documents/${result.document._id}/file`).expect(404);
+    const opened = await alice.get(`/api/documents/${result.document._id}/file`).expect(302);
+    expect(opened.headers.location).to.match(/^https:\/\/read\.example\//);
+    expect(opened.headers['cache-control']).to.equal('no-store');
+    expect((await alice.get('/api/documents?status=saved').expect(200)).body.documents).to.have.length(1);
+  });
+
+  it('removes only an owned document and its R2 objects', async () => {
+    const result = await begin(); await upload(result.document._id);
+    await alice.post(`/api/documents/${result.document._id}/complete`).send({}).expect(200);
+    await bob.delete(`/api/documents/${result.document._id}`).expect(404);
+    expect(storage.objects.size).to.equal(1);
+    await alice.delete(`/api/documents/${result.document._id}`).expect(204);
+    expect(await Document.findById(result.document._id)).to.equal(null);
+    expect(storage.objects.size).to.equal(0);
+  });
+
+  it('revokes file access during failed cleanup and allows removal to be retried', async () => {
+    const result = await begin(); await upload(result.document._id);
+    await alice.post(`/api/documents/${result.document._id}/complete`).send({}).expect(200);
+    const remove = storage.remove.bind(storage);
+    storage.remove = async () => { throw new DocumentError(503, 'storage_unavailable', 'Try again.'); };
+    await alice.delete(`/api/documents/${result.document._id}`).expect(503);
+    expect((await Document.findById(result.document._id)).status).to.equal('deleting');
+    await alice.get(`/api/documents/${result.document._id}/file`).expect(409);
+    storage.remove = remove;
+    await alice.delete(`/api/documents/${result.document._id}`).expect(204);
+    expect(storage.objects.size).to.equal(0);
+  });
+
+  it('prevents an in-flight validator from restoring a removed document', async () => {
+    const result = await begin(); await upload(result.document._id);
+    let notify;
+    let finish;
+    const started = new Promise(resolve => { notify = resolve; });
+    const blocked = new Promise(resolve => { finish = resolve; });
+    const inspect = inspector.inspect.bind(inspector);
+    inspector.inspect = async data => { notify(); await blocked; return inspect(data); };
+    const pending = alice.post(`/api/documents/${result.document._id}/complete`).send({}).then(value => value);
+    await started;
+    await alice.delete(`/api/documents/${result.document._id}`).expect(204);
+    finish();
+    expect((await pending).status).to.equal(409);
+    expect(await Document.findById(result.document._id)).to.equal(null);
+    expect(storage.objects.size).to.equal(0);
   });
 
   it('does not remove a committed snapshot if the MongoDB acknowledgement is lost', async () => {

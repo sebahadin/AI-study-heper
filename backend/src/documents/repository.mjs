@@ -4,10 +4,18 @@ export class DocumentRepository {
   constructor(model = Document) { this.model = model; }
 
   async create(values) { return (await this.model.create(values)).toObject(); }
-  async list(user, before, limit) {
-    return this.model.find({ user, ...(before && { _id: { $lt: before } }) }).sort({ _id: -1 }).limit(limit).lean();
+  async list(user, before, limit, filter = {}) {
+    return this.model.find({ ...filter, user, ...(before && { _id: { $lt: before } }) }).sort({ _id: -1 }).limit(limit).lean();
   }
   async get(user, id) { return this.model.findOne({ _id: id, user }).lean(); }
+
+  async markDeleting(user, id) {
+    return this.model.findOneAndUpdate({ _id: id, user }, {
+      $set: { status: 'deleting', validationToken: null, validationLeaseUntil: null },
+    }, { new: true, runValidators: true }).lean();
+  }
+
+  async remove(user, id) { return this.model.deleteOne({ _id: id, user, status: 'deleting' }); }
 
   async claim(user, id, token, now, leaseUntil) {
     return this.model.findOneAndUpdate({

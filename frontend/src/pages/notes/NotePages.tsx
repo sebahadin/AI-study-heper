@@ -1,4 +1,5 @@
 import { NoteConnections } from '../../components/ConnectedMaterials';
+import { LinkedDocuments } from '../../components/documents/DocumentCards';
 import { FlashcardReview } from '../../components/FlashcardReview';
 import { CoursePicker, CourseBadges, courseIds, effectiveCourses } from '../../components/CourseFields';
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
@@ -127,6 +128,7 @@ export function NoteDetail() {
       <div className="note-canvas"><article className="note-paper is-reading" aria-label="Note document"><div className="note-paper-kicker"><span>{book?.title || 'Personal notebook'}</span><span>Reading mode</span></div><h2 className="note-document-title">{note.title}</h2><NoteDocument content={note.content} contentHtml={note.contentHtml} /><footer className="note-paper-footer"><span>{wordCount(note.content)} words</span><span>Classmate · Notes</span></footer></article></div>
       <div className="note-bottom-bar"><span>Read, reflect, make a connection.</span><Link to={`/notes/${note._id}/edit${context ? `?course=${context}` : ''}`}>Continue writing <span aria-hidden="true">→</span></Link></div>
     </section></div>{!focus && data.related && <NoteConnections related={data.related} noteId={note._id} onReview={() => setReview(true)} />}</div>
+    {!focus && <LinkedDocuments scope={{ note: note._id }} title="PDFs linked to this note" />}
     {review && data.related && data.related.flashcards.length > 0 && <FlashcardReview cards={data.related.flashcards} quizTo={book ? `/flashcards/quiz?tags=${book._id}` : `/flashcards/quiz?course=${data.related.courses[0]?._id || ''}`} onClose={() => setReview(false)} />}
   </>;
 }

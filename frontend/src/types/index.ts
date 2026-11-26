@@ -45,3 +45,22 @@ export interface MaterialConnections {
 }
 export interface BookDetailData { book: Book; related?: MaterialConnections }
 export interface NoteDetailData { note: Note; related?: MaterialConnections }
+
+export interface StudyDocument {
+  _id: string; title: string; filename: string;
+  status: 'awaiting_upload' | 'validating' | 'uploaded' | 'failed' | 'deleting';
+  courses: string[]; book: string | null; note: string | null;
+  byteCount: number | null; pageCount: number | null; sourceVersion: string | null;
+  error: { code: string; message: string } | null;
+  uploadExpiresAt: string; createdAt: string; updatedAt: string;
+}
+export interface DocumentOptions {
+  courses: CourseRef[]; books: BookRef[];
+  notes: { _id: string; title: string; courses?: string[]; book: string | null }[];
+}
+export interface DocumentPage { documents: StudyDocument[]; nextCursor: string | null }
+export interface DocumentPolicy { maxPages: number; maxBytes: number }
+export interface DocumentUploadIntent {
+  document: StudyDocument; policy: DocumentPolicy;
+  upload: { url: string; method: 'PUT'; headers: { 'Content-Type': string }; expiresAt: string };
+}

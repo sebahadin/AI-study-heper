@@ -11,6 +11,7 @@ import './styles/study-workspace.css';
 import './styles/discovery.css';
 import './styles/themes.css';
 import './styles/tactile.css';
+import './styles/documents.css';
 
 applyTheme(readTheme());
 

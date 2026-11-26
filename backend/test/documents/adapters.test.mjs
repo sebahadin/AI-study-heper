@@ -24,6 +24,15 @@ async function rejects(operation, status, code) {
 }
 
 describe('R2 adapter', () => {
+  it('signs short-lived read access to one private object', async () => {
+    const storage = new R2Storage(configuration);
+    try {
+      const url = new URL(await storage.signDownload('documents/owner/source.pdf', 60));
+      expect(url.pathname).to.contain('/documents/owner/source.pdf');
+      expect(url.searchParams.get('X-Amz-Expires')).to.equal('60');
+      expect(url.toString()).not.to.contain(configuration.secretAccessKey);
+    } finally { storage.client?.destroy(); }
+  });
   it('signs real SDK URLs for one object, exact length/type and short expiry without network access', async () => {
     const storage = new R2Storage(configuration);
     try {

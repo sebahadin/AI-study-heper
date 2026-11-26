@@ -14,6 +14,9 @@ import { QuizPage } from './pages/flashcards/QuizPage';
 
 const NoteDetail = lazy(() => import('./pages/notes/NotePages').then((module) => ({ default: module.NoteDetail })));
 const NoteEditor = lazy(() => import('./pages/notes/NotePages').then((module) => ({ default: module.NoteEditor })));
+const DocumentLibrary = lazy(() => import('./pages/documents/DocumentLibrary').then(module => ({ default: module.DocumentLibrary })));
+const DocumentUpload = lazy(() => import('./pages/documents/DocumentUpload').then(module => ({ default: module.DocumentUpload })));
+const DocumentDetail = lazy(() => import('./pages/documents/DocumentDetail').then(module => ({ default: module.DocumentDetail })));
 
 function ProtectedRoute() {
   const { user } = useAuth();
@@ -25,7 +28,7 @@ export default function App() {
   const { user, loading, error, refresh } = useAuth();
   if (loading) { return <main className="boot-screen"><Loading message="Opening your workspace…" /></main>; }
   if (error) { return <main className="boot-screen"><LoadError message={error} retry={refresh} /></main>; }
-  return <Suspense fallback={<Loading message="Opening your note…" />}><Routes><Route element={<Layout />}>
+  return <Suspense fallback={<Loading message="Opening your workspace…" />}><Routes><Route element={<Layout />}>
     <Route index element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
     <Route path="login" element={<AuthPage key="login" />} />
     <Route path="register" element={<AuthPage key="register" register />} />
@@ -39,6 +42,9 @@ export default function App() {
       <Route path="books/add" element={<BookEditor />} />
       <Route path="books/:id/edit" element={<BookEditor />} />
       <Route path="books/:id" element={<BookDetail />} />
+      <Route path="documents" element={<DocumentLibrary />} />
+      <Route path="documents/upload" element={<DocumentUpload />} />
+      <Route path="documents/:id" element={<DocumentDetail />} />
       <Route path="notes" element={<NoteList />} />
       <Route path="notes/add" element={<NoteEditor />} />
       <Route path="notes/:id/edit" element={<NoteEditor />} />

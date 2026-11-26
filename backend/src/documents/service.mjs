@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Book, Note } from '../db.mjs';
 import { courseFields } from '../course-materials.mjs';
 import { DocumentError } from './errors.mjs';
+import { documentFilter, documentOptions } from './filters.mjs';
 
 export const UPLOAD_URL_SECONDS = 300;
 export const FINALIZE_GRACE_MS = 15 * 60 * 1000;
@@ -58,11 +59,13 @@ export class DocumentService {
   }
 
   async policy() { return this.inspector.policy(); }
-  async list(user, before) {
+  async options(user) { return documentOptions(user); }
+  async list(user, before, query = {}) {
     if (before !== undefined && (typeof before !== 'string' || !mongoose.isObjectIdOrHexString(before))) {
       throw new DocumentError(400, 'invalid_cursor', 'Invalid document page cursor.');
     }
-    const rows = await this.repository.list(user, before, DOCUMENT_PAGE_SIZE + 1);
+    const filter = await documentFilter(user, query);
+    const rows = await this.repository.list(user, before, DOCUMENT_PAGE_SIZE + 1, filter);
     const page = rows.slice(0, DOCUMENT_PAGE_SIZE);
     return {
       documents: page.map(publicDocument),
@@ -73,6 +76,25 @@ export class DocumentService {
     const document = await this.repository.get(user, id);
     if (!document) { throw notFound(); }
     return publicDocument(document);
+  }
+
+  async file(user, id) {
+    const document = await this.repository.get(user, id);
+    if (!document) { throw notFound(); }
+    if (document.status !== 'uploaded' || !document.objectKey) {
+      throw new DocumentError(409, 'document_unavailable', 'This PDF is not available to read yet.');
+    }
+    return this.storage.signDownload(document.objectKey, 60);
+  }
+
+  async remove(user, id) {
+    // Revoke access/validation first; failed cleanup remains visible and retryable.
+    const document = await this.repository.markDeleting(user, id);
+    if (!document) { throw notFound(); }
+    for (const key of new Set([document.uploadKey, document.objectKey].filter(Boolean))) {
+      await this.storage.remove(key);
+    }
+    await this.repository.remove(user, id);
   }
 
   async begin(user, body) {

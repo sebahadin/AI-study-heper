@@ -1,3 +1,4 @@
+import { LinkedDocuments } from '../../components/documents/DocumentCards';
 import { FlashcardFlip } from '../../components/FlashcardFlip';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -142,9 +143,9 @@ export function CourseDetail() {
       </div><div className="course-hero-symbol" aria-hidden="true"><Icon name="courses" size={98} /><i /><i /></div>
     </section>
     <nav className="course-learning-path" aria-label="Explore this course">{materialKinds.map((kind, index) => <Link key={kind} className="course-path-step" to={`?tab=${kind}`} onClick={() => setQuery('')}><span className="course-path-number">0{index + 1}</span><span className={`stat-icon stat-icon--${kind}`}><Icon name={materialIcons[kind]} size={23} /></span><div><strong>{kind === 'books' ? 'Read & explore' : kind === 'notes' ? 'Think & connect' : 'Recall & practice'}</strong><p>{data[kind].length} {materialLabels[kind].toLowerCase()} to {kind === 'books' ? 'discover' : kind === 'notes' ? 'revisit' : 'review'}</p></div><Icon name="connections" size={18} /></Link>)}</nav>
-    <nav className="course-tabs" aria-label="Course materials">{['overview', ...materialKinds].map(name => <Link key={name} to={name === 'overview' ? '.' : `?tab=${name}`} onClick={() => setQuery('')} aria-current={tab === name ? 'page' : undefined}>{name === 'overview' ? 'Overview' : materialLabels[name as MaterialKind]}</Link>)}</nav>
+    <nav className="course-tabs" aria-label="Course materials">{['overview', ...materialKinds].map(name => <Link key={name} to={name === 'overview' ? '.' : `?tab=${name}`} onClick={() => setQuery('')} aria-current={tab === name ? 'page' : undefined}>{name === 'overview' ? 'Overview' : materialLabels[name as MaterialKind]}</Link>)}<Link to={`/documents?course=${course._id}`}>PDFs</Link></nav>
     {tab !== 'overview' && <div className="course-material-search"><SearchField label={`Search course ${tab}`} value={query} onChange={setQuery} /></div>}
-    {tab === 'overview' ? <div className="course-overview">{materialKinds.map(kind => materialSection(kind, true))}</div> : materialSection(tab as MaterialKind)}
+    {tab === 'overview' ? <><div className="course-overview">{materialKinds.map(kind => materialSection(kind, true))}</div><LinkedDocuments scope={{ course: course._id }} title="Course PDFs" /></> : materialSection(tab as MaterialKind)}
     {manage && <ManageMaterials kind={manage} course={course} onClose={() => setManage(null)} onSaved={reload} />}
     {review && review.length > 0 && <FlashcardReview cards={review} quizTo={quizTo} onClose={() => setReview(null)} />}
     {(notes.length > 0 || flashcards.length > 0 || books.length > 0) && <p className="course-footnote">Shared materials stay connected across courses. Notes and flashcards from a related book are included automatically.</p>}

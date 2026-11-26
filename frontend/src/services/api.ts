@@ -1,7 +1,7 @@
 import type { FieldErrors } from '../types';
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number, public fields: FieldErrors = {}) { super(message); }
+  constructor(message: string, public status: number, public fields: FieldErrors = {}, public code?: string) { super(message); }
 }
 
 export async function api<T>(path: string, options: Omit<RequestInit, 'body'> & { body?: unknown } = {}): Promise<T> {
@@ -23,7 +23,7 @@ export async function api<T>(path: string, options: Omit<RequestInit, 'body'> & 
     if (response.status === 401 && !path.startsWith('/auth/')) {
       window.dispatchEvent(new Event('classmate:unauthenticated'));
     }
-    throw new ApiError(data.error || 'The request failed.', response.status, data.fields);
+    throw new ApiError(data.error || 'The request failed.', response.status, data.fields, data.code);
   }
   return data as T;
 }

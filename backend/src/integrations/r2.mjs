@@ -31,6 +31,14 @@ export class R2Storage {
     } catch { throw unavailable(); }
   }
 
+  async signDownload(key, expiresIn) {
+    try {
+      return await this.signer(this.configuredClient(), new GetObjectCommand({
+        Bucket: this.configuration.bucket, Key: key,
+      }), { expiresIn });
+    } catch { throw unavailable(); }
+  }
+
   async download(key, { maxBytes, expectedBytes }) {
     try {
       const result = await this.configuredClient().send(

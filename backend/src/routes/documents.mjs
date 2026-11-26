@@ -16,9 +16,12 @@ export function createDocumentsRouter(service = new DocumentService({
   router.use(requireAuth);
   router.param('id', validateId);
   router.get('/policy', async (_req, res) => res.json({ policy: await service.policy() }));
-  router.get('/', async (req, res) => res.json(await service.list(req.user._id, req.query.before)));
+  router.get('/options', async (req, res) => res.json(await service.options(req.user._id)));
+  router.get('/', async (req, res) => res.json(await service.list(req.user._id, req.query.before, req.query)));
   router.post('/uploads', async (req, res) => res.status(201).json(await service.begin(req.user._id, req.body)));
   router.get('/:id', async (req, res) => res.json({ document: await service.get(req.user._id, req.params.id) }));
+  router.get('/:id/file', async (req, res) => res.redirect(302, await service.file(req.user._id, req.params.id)));
+  router.delete('/:id', async (req, res) => { await service.remove(req.user._id, req.params.id); res.status(204).end(); });
   router.post('/:id/complete', async (req, res) => {
     if (req.body && (Array.isArray(req.body) || typeof req.body !== 'object' || Object.keys(req.body).length)) {
       throw new DocumentError(400, 'invalid_confirmation', 'Confirm using the document ID only.');

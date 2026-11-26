@@ -86,7 +86,7 @@ const documentSchema = new mongoose.Schema({
     courses: courseRefs(),
     book: { type: mongoose.Schema.Types.ObjectId, ref: 'Book', default: null },
     note: { type: mongoose.Schema.Types.ObjectId, ref: 'Note', default: null },
-    status: { type: String, enum: ['awaiting_upload', 'validating', 'uploaded', 'failed'], required: true },
+    status: { type: String, enum: ['awaiting_upload', 'validating', 'uploaded', 'failed', 'deleting'], required: true },
     expectedBytes: { type: Number, required: true, min: 1, validate: Number.isSafeInteger },
     maxBytes: { type: Number, required: true, min: 1, validate: Number.isSafeInteger },
     uploadKey: { type: String, required: true },
