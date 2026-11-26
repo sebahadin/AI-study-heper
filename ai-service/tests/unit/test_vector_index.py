@@ -5,6 +5,9 @@ import re
 
 from pydantic import ValidationError
 import pytest
+import numpy as np
+from langchain_huggingface import HuggingFaceEmbeddings
+from transformers import PreTrainedTokenizerBase
 
 from app.core.errors import APIError
 from app.core.retrieval_config import RetrievalSettings
@@ -61,10 +64,19 @@ def prepared(text="Long examples demonstrate how token limits work. " * 8):
     )
 
 
-class FakeTokenizer:
+class FakeTokenizer(PreTrainedTokenizerBase):
+    special_count = 2
+
+    def tokenize(self, text, **_options):
+        return list(text)
+
+    def num_special_tokens_to_add(self, pair=False):
+        assert pair is False
+        return self.special_count
+
     def encode(self, text, **options):
         assert options == {"add_special_tokens": True, "truncation": False}
-        return list(range(len(text) + 2))
+        return list(range(len(text) + self.special_count))
 
 
 class FakeModel:
@@ -81,12 +93,16 @@ class FakeModel:
         assert options["normalize_embeddings"] is True
         assert options["prompt"] == ""
         self.seen.extend(texts)
-        return [(1., 0., 0.) for _ in texts]
+        return np.asarray([(1., 0., 0.) for _ in texts])
 
 
 def fake_embedder():
     model = LocalHuggingFaceEmbeddings(RetrievalSettings(_env_file=None))
     model._model = FakeModel()
+    model._embeddings = HuggingFaceEmbeddings.model_construct(
+        encode_kwargs={"normalize_embeddings": True, "prompt": ""},
+    )
+    model._embeddings._client = model._model
     return model
 
 
@@ -130,7 +146,7 @@ async def test_prepared_embedding_checks_authorization_before_model_loading(ctx,
                                        ([(1., 0.)], "invalid_embedding_output"), ([(0., 0., 0.)], "invalid_embedding_output")])
 async def test_bad_or_missing_model_outputs_cannot_be_indexed(rows, code, monkeypatch):
     model = fake_embedder()
-    monkeypatch.setattr(model._model, "encode", lambda *_args, **_kwargs: rows)
+    monkeypatch.setattr(model._model, "encode", lambda *_args, **_kwargs: np.asarray(rows))
     with pytest.raises(APIError) as error:
         await model.embed(["Small text"])
     assert error.value.code == code
@@ -302,3 +318,89 @@ async def test_pipeline_rejects_model_mismatch_before_inference(tmp_path, monkey
         await DocumentIndexer(embeddings=model, index=index).index_prepared_document(prepared(), context=context())
     assert error.value.code == "index_model_mismatch"
     assert not index.path.exists()
+
+
+@pytest.mark.parametrize("special_tokens", [2, 6])
+async def test_token_splitter_reserves_special_tokens_and_preserves_source_coverage(special_tokens):
+    model = fake_embedder()
+    model._model.tokenizer = FakeTokenizer()
+    model._model.tokenizer.special_count = special_tokens
+    text = "repeat " * 20 + "final words"
+    chunks = await model.embed_prepared_pdf(prepared(text), context=context())
+    assert len(chunks) > 1
+    assert re.sub(r"\s", "", "".join(chunk.passage.text for chunk in chunks)) == re.sub(r"\s", "", text)
+    assert all(len(chunk.passage.text) + special_tokens <= model._model.max_seq_length for chunk in chunks)
+
+
+async def test_passage_at_exact_model_limit_keeps_its_citation_id():
+    model = fake_embedder()
+    document = prepared("x" * (model._model.max_seq_length - 2))
+    chunks = await model.embed_prepared_pdf(document, context=context())
+    assert len(chunks) == 1
+    assert chunks[0].passage.citation == document.chunks[0].passage.citation
+    assert chunks[0].passage.text == document.chunks[0].passage.text
+
+
+@pytest.mark.parametrize("failure", ["missing", "invented", "oversized"])
+async def test_bad_splitter_results_fail_before_any_embedding(failure, monkeypatch):
+    model = fake_embedder()
+    document = prepared("Beginning repeated source material. " * 5 + "The end.")
+    text = document.chunks[0].passage.text
+    class BrokenSplitter:
+        def split_text(self, _text):
+            if failure == "missing":
+                return [text[:20], text[-20:]]
+            if failure == "invented":
+                return ["invented-private-source-text"]
+            return [text]
+    monkeypatch.setattr("app.providers.local_embeddings.RecursiveCharacterTextSplitter.from_huggingface_tokenizer",
+                        lambda *_args, **_kwargs: BrokenSplitter())
+    with pytest.raises(APIError) as error:
+        await model.embed_prepared_pdf(document, context=context())
+    expected = "embedding_input_too_long" if failure == "oversized" else "embedding_chunking_failed"
+    assert error.value.code == expected
+    assert model._model.seen == []
+    assert "invented-private" not in str(error.value)
+
+
+async def test_token_splitter_version_changes_subpassage_ids_without_changing_text(monkeypatch):
+    model = fake_embedder()
+    document = prepared()
+    first = await model.embed_prepared_pdf(document, context=context())
+    monkeypatch.setattr("app.providers.local_embeddings.PDF_TOKEN_SPLITTING_VERSION", "next-split-version")
+    second = await model.embed_prepared_pdf(document, context=context())
+    assert [chunk.passage.text for chunk in first] == [chunk.passage.text for chunk in second]
+    assert {chunk.passage.citation.chunk_id for chunk in first}.isdisjoint(chunk.passage.citation.chunk_id for chunk in second)
+
+
+async def test_langchain_huggingface_constructor_loads_only_on_first_use_and_keeps_local_settings(monkeypatch):
+    calls = []
+    def load(model_name, **kwargs):
+        calls.append((model_name, kwargs))
+        return FakeModel()
+    monkeypatch.setattr("sentence_transformers.SentenceTransformer", load)
+    settings = RetrievalSettings(_env_file=None, embedding_local_files_only=True)
+    model = LocalHuggingFaceEmbeddings(settings)
+    assert model._model is None and model._embeddings is None and calls == []
+    vectors = await model.embed(["Small text"])
+    assert len(vectors) == 1
+    assert isinstance(model._embeddings, HuggingFaceEmbeddings)
+    assert len(calls) == 1
+    name, options = calls[0]
+    assert name == settings.embedding_model
+    assert options["revision"] == settings.embedding_revision
+    assert options["device"] == settings.embedding_device
+    assert options["local_files_only"] is True
+    assert options["trust_remote_code"] is False and options["token"] is False
+    assert options["model_kwargs"]["use_safetensors"] is True
+    await model.embed(["Another small text"])
+    assert len(calls) == 1
+
+
+async def test_langchain_embedding_normalization_keeps_original_passage_text_and_citations():
+    model = fake_embedder()
+    document = prepared("First line.\nSecond line.")
+    chunks = await model.embed_prepared_pdf(document, context=context())
+    assert model._model.seen == ["First line. Second line."]
+    assert chunks[0].passage.text == "First line.\nSecond line."
+    assert chunks[0].passage.citation == document.chunks[0].passage.citation

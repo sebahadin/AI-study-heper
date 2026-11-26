@@ -8,7 +8,10 @@ import json
 from math import isfinite
 from threading import RLock
 
-from app.core.constants import MAX_PDF_PREPARED_CHUNKS
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from app.core.constants import MAX_PDF_PREPARED_CHUNKS, PDF_TOKEN_SPLITTING_VERSION
 from app.core.errors import APIError
 from app.core.retrieval_config import RetrievalSettings
 from app.schemas.context import ExecutionContext
@@ -20,30 +23,42 @@ class LocalHuggingFaceEmbeddings:
     def __init__(self, settings: RetrievalSettings):
         self.settings = settings
         self._model = None
+        self._embeddings = None
         self._lock = RLock()
         self.model_id = (
             f"hf:{settings.embedding_model}@{settings.embedding_revision}"
             f"/sentence-transformers:{version('sentence-transformers')}"
-            f"/transformers:{version('transformers')}/normalized-v1"
+            f"/transformers:{version('transformers')}"
+            f"/langchain-huggingface:{version('langchain-huggingface')}/normalized-v2"
         )
 
     def _load_model(self):
         if self._model is None:
-            from sentence_transformers import SentenceTransformer
-
-            self._model = SentenceTransformer(
-                self.settings.embedding_model, revision=self.settings.embedding_revision,
+            embeddings = HuggingFaceEmbeddings(
+                model_name=self.settings.embedding_model,
                 cache_folder=str(self.settings.embedding_cache_path),
-                device=self.settings.embedding_device,
-                local_files_only=self.settings.embedding_local_files_only,
-                trust_remote_code=False, token=False,
-                model_kwargs={"use_safetensors": True},
+                model_kwargs={
+                    "revision": self.settings.embedding_revision,
+                    "device": self.settings.embedding_device,
+                    "local_files_only": self.settings.embedding_local_files_only,
+                    "trust_remote_code": False, "token": False,
+                    "model_kwargs": {"use_safetensors": True},
+                },
+                encode_kwargs={
+                    "batch_size": self.settings.embedding_batch_size,
+                    "normalize_embeddings": True, "convert_to_numpy": True, "prompt": "",
+                },
+                show_progress=False, multi_process=False,
             )
+            # Reuse the encoder owned by LangChain for tokenizer/limit checks.
+            self._model = embeddings._client
+            self._embeddings = embeddings
         return self._model
 
     @staticmethod
     def _token_count(model, text: str) -> int:
-        return len(model.tokenizer.encode(text, add_special_tokens=True, truncation=False))
+        # Match HuggingFaceEmbeddings' newline normalization for inference only.
+        return len(model.tokenizer.encode(text.replace("\n", " "), add_special_tokens=True, truncation=False))
 
     def _encode(self, texts: Sequence[str]) -> tuple[tuple[float, ...], ...]:
         if not texts:
@@ -54,11 +69,7 @@ class LocalHuggingFaceEmbeddings:
             model = self._load_model()
             if any(self._token_count(model, text) > model.max_seq_length for text in texts):
                 raise APIError(422, "embedding_input_too_long", "Split this passage before embedding it.")
-            vectors = model.encode(
-                list(texts), batch_size=self.settings.embedding_batch_size,
-                normalize_embeddings=True, convert_to_numpy=True,
-                show_progress_bar=False, prompt="",
-            )
+            vectors = self._embeddings.embed_documents(list(texts))
             dimension_method = getattr(model, "get_embedding_dimension", None) or model.get_sentence_embedding_dimension
             dimension = dimension_method()
             if len(vectors) != len(texts):
@@ -78,31 +89,36 @@ class LocalHuggingFaceEmbeddings:
             raise APIError(503, "embedding_unavailable", "Local embeddings are temporarily unavailable.") from None
 
     def _fit_spans(self, text: str, model) -> list[tuple[int, int]]:
-        """Bisect at nearby word boundaries until every exact source span fits."""
+        """Use LangChain's HF token counting and verify exact source coverage."""
+        if self._token_count(model, text) <= model.max_seq_length:
+            return [(0, len(text))]
+        # LangChain counts text tokens; reserve the encoder's special tokens.
+        budget = model.max_seq_length - model.tokenizer.num_special_tokens_to_add(pair=False)
+        if budget < 1:
+            raise APIError(503, "invalid_embedding_model", "The embedding model has no usable text capacity.")
+        splitter = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
+            model.tokenizer, chunk_size=budget, chunk_overlap=0,
+            keep_separator=True, strip_whitespace=False,
+        )
         spans = []
-
-        def split(start, end):
-            while start < end and text[start].isspace():
-                start += 1
-            while end > start and text[end - 1].isspace():
-                end -= 1
-            if start == end:
-                return
-            if self._token_count(model, text[start:end]) <= model.max_seq_length:
-                spans.append((start, end))
-                if len(spans) > MAX_PDF_PREPARED_CHUNKS:
-                    raise APIError(422, "pdf_chunk_limit_exceeded", "The PDF produces too many passages to process.")
-                return
-            if end - start == 1:
-                raise APIError(422, "embedding_input_too_long", "This text cannot fit the embedding model.")
-            middle = (start + end) // 2
-            boundary = max(text.rfind(" ", start, middle + 1), text.rfind("\n", start, middle + 1))
-            if boundary <= start + (end - start) // 3:
-                boundary = middle
-            split(start, boundary)
-            split(boundary, end)
-
-        split(0, len(text))
+        cursor = 0
+        for raw in splitter.split_text(text):
+            raw_start = text.find(raw, cursor)
+            if raw_start < 0 or text[cursor:raw_start].strip():
+                raise APIError(500, "embedding_chunking_failed", "The split passages could not be verified against the source.")
+            cursor = raw_start + len(raw)
+            part = raw.strip()
+            if not part:
+                continue
+            start = raw_start + len(raw) - len(raw.lstrip())
+            end = start + len(part)
+            if self._token_count(model, part) > model.max_seq_length:
+                raise APIError(422, "embedding_input_too_long", "A split passage exceeds the embedding model's token limit.")
+            spans.append((start, end))
+            if len(spans) > MAX_PDF_PREPARED_CHUNKS:
+                raise APIError(422, "pdf_chunk_limit_exceeded", "The PDF produces too many passages to process.")
+        if text[cursor:].strip():
+            raise APIError(500, "embedding_chunking_failed", "The split passages could not be verified against the source.")
         return spans
 
     def _embed_prepared(self, prepared: PreparedPdf) -> tuple[EmbeddedChunk, ...]:
@@ -114,7 +130,8 @@ class LocalHuggingFaceEmbeddings:
                     text = chunk.passage.text[start:end]
                     citation = chunk.passage.citation
                     if start != 0 or end != len(chunk.passage.text):
-                        identity = json.dumps([citation.chunk_id, self.model_id, start, end, text], ensure_ascii=True)
+                        identity = json.dumps([citation.chunk_id, self.model_id, PDF_TOKEN_SPLITTING_VERSION,
+                                               version("langchain-text-splitters"), start, end, text], ensure_ascii=True)
                         citation = citation.model_copy(update={"chunk_id": "token-" + sha256(identity.encode()).hexdigest()})
                     passages.append(chunk.passage.model_copy(update={"citation": citation, "text": text}))
                     if len(passages) > MAX_PDF_PREPARED_CHUNKS:

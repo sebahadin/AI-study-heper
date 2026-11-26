@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 from pypdf import PdfWriter
+from langchain_huggingface import HuggingFaceEmbeddings
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 import pytest
 
@@ -53,6 +54,7 @@ async def test_real_model_pdf_indexing_search_and_fresh_process_persistence(tmp_
     embeddings = LocalHuggingFaceEmbeddings(settings)
     query = (await embeddings.embed(["Which organelle supplies energy to cells?"]))[0]
     assert len(query) == 384
+    assert isinstance(embeddings._embeddings, HuggingFaceEmbeddings)
     index = ChromaIndex(path=tmp_path / "chroma", embedding_model=embeddings.model_id, dimension=len(query))
     indexer = DocumentIndexer(embeddings=embeddings, index=index)
 
@@ -87,6 +89,18 @@ async def test_real_model_pdf_indexing_search_and_fresh_process_persistence(tmp_
     receipt = await indexer.index_prepared_document(prepared, context=context(long_ref))
     assert receipt.expected_chunks > len(prepared.chunks)
     assert receipt.indexed_chunks == receipt.expected_chunks
+
+    # Verify the actual HF tokenizer on repeated text, code, Unicode and punctuation.
+    real_model = embeddings._load_model()
+    for text in ["repeat " * 700 + "the final thought", "def recall(items):\n    return items[0]\n" * 80,
+                 "学习材料" * 200, "+" * 800, "x " * 254, "x " * 255]:
+        spans = embeddings._fit_spans(text, real_model)
+        covered = [False] * len(text)
+        for start, end in spans:
+            assert 0 <= start < end <= len(text)
+            assert embeddings._token_count(real_model, text[start:end]) <= real_model.max_seq_length
+            covered[start:end] = [True] * (end - start)
+        assert all(character.isspace() or covered[position] for position, character in enumerate(text))
 
     state = {"path": str(index.path), "model": embeddings.model_id, "query": query, "context": context(biology).model_dump()}
     probe = '''

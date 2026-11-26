@@ -17,3 +17,5 @@ MAX_PDF_TEXT_CHARACTERS: Final[int] = 250_000
 MAX_PDF_CONTENT_STREAM_BYTES: Final[int] = 2 * 1024 * 1024
 MAX_PDF_PREPARED_CHUNKS: Final[int] = 1000
 PDF_PREPARATION_VERSION: Final[str] = "pdf-text-v1"
+
+PDF_TOKEN_SPLITTING_VERSION: Final[str] = "langchain-hf-v1"
