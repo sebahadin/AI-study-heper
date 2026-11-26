@@ -1,0 +1,75 @@
+import express from 'express';
+import { timingSafeEqual } from 'node:crypto';
+import { DocumentError } from '../documents/errors.mjs';
+
+const uuid = value => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value);
+const invalid = () => new DocumentError(400, 'invalid_job_request', 'Check the document job request fields.');
+
+export function emptyJobBody(body) {
+  if (body !== undefined && (!body || Array.isArray(body) || typeof body !== 'object' || Object.keys(body).length)) {
+    throw invalid();
+  }
+}
+
+function leaseBody(body, fail = false) {
+  const allowed = fail ? ['lease_token', 'error_code', 'retryable'] : ['lease_token'];
+  if (!body || Array.isArray(body) || typeof body !== 'object' || !uuid(body.lease_token)
+      || Object.keys(body).some(key => !allowed.includes(key))
+      || (fail && (typeof body.error_code !== 'string' || (body.retryable !== undefined && typeof body.retryable !== 'boolean')))) {
+    throw invalid();
+  }
+  return body;
+}
+
+export function createDocumentJobsRouter(service, { token } = {}) {
+  const router = express.Router();
+  router.use((req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    // Authenticate before parsing any body or touching sessions/databases.
+    if (!/^[A-Za-z0-9_-]{32,256}$/.test(token || '')) {
+      return res.status(503).json({ error: 'Document processing is temporarily unavailable.', code: 'indexing_unavailable' });
+    }
+    const headers = req.rawHeaders.filter((_value, index) => index % 2 === 0).filter(name => name.toLowerCase() === 'authorization');
+    const match = /^Bearer ([A-Za-z0-9_-]{32,256})$/i.exec(req.get('authorization') || '');
+    const provided = Buffer.from(match?.[1] || '');
+    const expected = Buffer.from(token);
+    if (headers.length !== 1 || provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+      return res.set('WWW-Authenticate', 'Bearer').status(401).json({ error: 'Valid service credentials are required.', code: 'unauthorized' });
+    }
+    next();
+  });
+  router.use((req, _res, next) => {
+    if ((Number(req.get('content-length')) > 0 || req.get('transfer-encoding')) && !req.is('application/json')) {
+      return next(new DocumentError(415, 'unsupported_media_type', 'Send job requests as JSON.'));
+    }
+    next();
+  });
+  router.use(express.json({ limit: '16kb' }));
+  router.param('jobId', (_req, _res, next, value) => next(uuid(value) ? undefined : invalid()));
+  router.post('/claim', async (req, res) => {
+    emptyJobBody(req.body);
+    const job = await service.claim();
+    if (!job) { return res.status(204).end(); }
+    res.json(job);
+  });
+  router.post('/:jobId/heartbeat', async (req, res) => {
+    const body = leaseBody(req.body);
+    res.json(await service.heartbeat(req.params.jobId, body.lease_token));
+  });
+  router.post('/:jobId/source', async (req, res) => {
+    const body = leaseBody(req.body);
+    res.json(await service.source(req.params.jobId, body.lease_token));
+  });
+  router.post('/:jobId/fail', async (req, res) => {
+    const body = leaseBody(req.body, true);
+    res.json(await service.fail(req.params.jobId, body.lease_token, body.error_code, body.retryable ?? false));
+  });
+  router.use((_req, res) => res.status(404).json({ error: 'Internal endpoint not found.', code: 'not_found' }));
+  router.use((error, _req, res, _next) => {
+    if (error instanceof DocumentError) { return res.status(error.status).json({ error: error.message, code: error.code }); }
+    if (error.type === 'entity.parse.failed') { return res.status(400).json({ error: 'Invalid JSON request.', code: 'invalid_job_request' }); }
+    if (error.type === 'entity.too.large') { return res.status(413).json({ error: 'The job request is too large.', code: 'job_request_too_large' }); }
+    res.status(503).json({ error: 'Document processing is temporarily unavailable.', code: 'indexing_unavailable' });
+  });
+  return router;
+}

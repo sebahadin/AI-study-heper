@@ -15,13 +15,17 @@ import booksRoutes from './routes/books.mjs';
 import notesRoutes from './routes/notes.mjs';
 import flashcardsRoutes from './routes/flashcards.mjs';
 import { createDocumentsRouter } from './routes/documents.mjs';
+import { createDocumentJobsRouter } from './routes/document-jobs.mjs';
+import { createDocumentJobService } from './documents/job-service.mjs';
 
-export function createApp({ sessionStore, frontendDirectory, documentService } = {}) {
+export function createApp({ sessionStore, frontendDirectory, documentService, documentJobsService, internalServiceToken = settings.aiServiceToken } = {}) {
   const app = express();
   app.disable('x-powered-by');
   if (settings.production) {
     app.set('trust proxy', 1);
   }
+  const jobs = documentJobsService || createDocumentJobService();
+  app.use('/internal/document-jobs', createDocumentJobsRouter(jobs, { token: internalServiceToken }));
   app.use(express.json({ limit: '1mb' }));
   app.use('/api', (req, res, next) => {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
@@ -50,7 +54,7 @@ export function createApp({ sessionStore, frontendDirectory, documentService } =
   app.use('/api/books', booksRoutes);
   app.use('/api/notes', notesRoutes);
   app.use('/api/flashcards', flashcardsRoutes);
-  app.use('/api/documents', createDocumentsRouter(documentService));
+  app.use('/api/documents', createDocumentsRouter(documentService, jobs));
   app.use('/api', (_req, res) => res.status(404).json({ error: 'API endpoint not found.' }));
 
   const frontend = frontendDirectory || fileURLToPath(new URL('../../frontend/dist/', import.meta.url));

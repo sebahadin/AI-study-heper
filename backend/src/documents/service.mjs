@@ -155,7 +155,7 @@ export class DocumentService {
       snapshotWritten = true;
       const updated = await this.repository.finalize(user, id, token, {
         objectKey, sourceVersion: randomUUID(), ...inspection,
-      });
+      }, this.clock());
       if (!updated) {
         await this.storage.remove(objectKey).catch(() => {});
         throw new DocumentError(409, 'upload_conflict', 'The document changed. Refresh and try again.');

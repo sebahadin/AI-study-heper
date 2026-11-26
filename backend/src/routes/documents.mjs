@@ -6,11 +6,13 @@ import { R2Storage } from '../integrations/r2.mjs';
 import { DocumentRepository } from '../documents/repository.mjs';
 import { DocumentService } from '../documents/service.mjs';
 import { DocumentError } from '../documents/errors.mjs';
+import { createDocumentJobService } from '../documents/job-service.mjs';
+import { emptyJobBody } from './document-jobs.mjs';
 
 export function createDocumentsRouter(service = new DocumentService({
   repository: new DocumentRepository(), storage: new R2Storage(settings.r2),
   inspector: new AiPdfClient({ baseUrl: settings.aiServiceUrl, token: settings.aiServiceToken }),
-})) {
+}), jobs = createDocumentJobService()) {
   const router = express.Router();
   router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   router.use(requireAuth);
@@ -20,6 +22,11 @@ export function createDocumentsRouter(service = new DocumentService({
   router.get('/', async (req, res) => res.json(await service.list(req.user._id, req.query.before, req.query)));
   router.post('/uploads', async (req, res) => res.status(201).json(await service.begin(req.user._id, req.body)));
   router.get('/:id', async (req, res) => res.json({ document: await service.get(req.user._id, req.params.id) }));
+  router.get('/:id/indexing', async (req, res) => res.json({ indexing: await jobs.status(req.user._id, req.params.id) }));
+  router.post('/:id/indexing/retry', async (req, res) => {
+    emptyJobBody(req.body);
+    res.json({ indexing: await jobs.retry(req.user._id, req.params.id) });
+  });
   router.get('/:id/file', async (req, res) => res.redirect(302, await service.file(req.user._id, req.params.id)));
   router.delete('/:id', async (req, res) => { await service.remove(req.user._id, req.params.id); res.status(204).end(); });
   router.post('/:id/complete', async (req, res) => {

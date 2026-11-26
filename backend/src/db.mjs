@@ -79,6 +79,23 @@ const Book = mongoose.model('Book', bookSchema);
 const Note = mongoose.model('Note', noteSchema);
 const Flashcard = mongoose.model('Flashcard', flashcardSchema);
 
+const indexingJobSchema = new mongoose.Schema({
+    jobId: { type: String, required: true },
+    user: { type: mongoose.Schema.Types.ObjectId, required: true },
+    sourceVersion: { type: String, required: true },
+    status: { type: String, enum: ['queued', 'processing', 'failed', 'ready'], required: true },
+    attempts: { type: Number, required: true, min: 0 },
+    maxAttempts: { type: Number, required: true, min: 1 },
+    availableAt: { type: Date, required: true },
+    updatedAt: { type: Date, required: true },
+    leaseToken: { type: String, default: null },
+    leaseUntil: { type: Date, default: null },
+    error: { type: new mongoose.Schema({ code: String, message: String }, { _id: false }), default: null },
+    lastFailureTokenHash: String,
+    lastFailureCode: String,
+    lastFailureRetryable: Boolean,
+}, { _id: false });
+
 const documentSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     title: { type: String, required: true, maxlength: 200 },
@@ -99,9 +116,15 @@ const documentSchema = new mongoose.Schema({
     pageCount: { type: Number, min: 1, validate: Number.isSafeInteger },
     byteCount: { type: Number, min: 1, validate: Number.isSafeInteger },
     sha256: { type: String, match: /^[0-9a-f]{64}$/ },
+    indexing: { type: indexingJobSchema, default: undefined },
     error: { type: new mongoose.Schema({ code: String, message: String }, { _id: false }), default: null },
 }, { timestamps: true });
 documentSchema.index({ user: 1, createdAt: -1 });
 documentSchema.index({ user: 1, courses: 1 });
+documentSchema.index({ status: 1, 'indexing.status': 1, 'indexing.availableAt': 1 });
+documentSchema.index({ status: 1, 'indexing.status': 1, 'indexing.leaseUntil': 1 });
+documentSchema.index({ 'indexing.jobId': 1 }, {
+    unique: true, partialFilterExpression: { 'indexing.jobId': { $type: 'string' } },
+});
 const Document = mongoose.model('Document', documentSchema);
 export { User, Course, Book, Note, Flashcard, Document };

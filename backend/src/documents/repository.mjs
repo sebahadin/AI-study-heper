@@ -1,4 +1,5 @@
 import { Document } from '../db.mjs';
+import { createIndexingJob } from './indexing-policy.mjs';
 
 export class DocumentRepository {
   constructor(model = Document) { this.model = model; }
@@ -25,9 +26,10 @@ export class DocumentRepository {
     { new: true, runValidators: true }).lean();
   }
 
-  async finalize(user, id, token, values) {
+  async finalize(user, id, token, values, now = new Date()) {
     return this.model.findOneAndUpdate({ _id: id, user, status: 'validating', validationToken: token }, {
-      $set: { ...values, status: 'uploaded', validationToken: null, validationLeaseUntil: null, error: null },
+      $set: { ...values, status: 'uploaded', validationToken: null, validationLeaseUntil: null, error: null,
+        indexing: createIndexingJob(user, values.sourceVersion, now) },
     }, { new: true, runValidators: true }).lean();
   }
 
