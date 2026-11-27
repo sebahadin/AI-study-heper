@@ -46,7 +46,15 @@ export interface MaterialConnections {
 export interface BookDetailData { book: Book; related?: MaterialConnections }
 export interface NoteDetailData { note: Note; related?: MaterialConnections }
 
+export interface IndexingState {
+  status: 'not_requested' | 'not_available' | 'cancelled' | 'queued' | 'processing' | 'ready' | 'failed';
+  error: { code: string; message: string } | null;
+  updatedAt: string;
+  pagesWithoutText?: number[];
+}
+
 export interface StudyDocument {
+  indexing?: IndexingState;
   _id: string; title: string; filename: string;
   status: 'awaiting_upload' | 'validating' | 'uploaded' | 'failed' | 'deleting';
   courses: string[]; book: string | null; note: string | null;

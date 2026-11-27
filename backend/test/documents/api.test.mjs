@@ -295,7 +295,7 @@ integration('Document uploads with MongoDB and Passport (requires TEST_DSN)', ()
     await bob.delete(`/api/documents/${result.document._id}`).expect(404);
     expect(storage.objects.size).to.equal(1);
     await alice.delete(`/api/documents/${result.document._id}`).expect(204);
-    expect(await Document.findById(result.document._id)).to.equal(null);
+    expect((await Document.findById(result.document._id)).status).to.equal('deleted');
     expect(storage.objects.size).to.equal(0);
   });
 
@@ -325,7 +325,7 @@ integration('Document uploads with MongoDB and Passport (requires TEST_DSN)', ()
     await alice.delete(`/api/documents/${result.document._id}`).expect(204);
     finish();
     expect((await pending).status).to.equal(409);
-    expect(await Document.findById(result.document._id)).to.equal(null);
+    expect((await Document.findById(result.document._id)).status).to.equal('deleted');
     expect(storage.objects.size).to.equal(0);
   });
 

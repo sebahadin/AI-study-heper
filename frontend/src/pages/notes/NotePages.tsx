@@ -13,6 +13,7 @@ import { Icon } from '../../components/Icon';
 import { NoteDocument } from '../../components/notes/NoteDocument';
 import { NoteToolbar, RichTextEditor, useNoteEditor } from '../../components/notes/RichTextEditor';
 import '../../styles/notes.css';
+import { IndexingPanel } from '../../components/indexing/IndexingPanel';
 import { wordCount } from '../../components/notes/noteContent';
 
 function NoteForm({ note, books }: { note?: Note; books: Book[] }) {
@@ -124,6 +125,7 @@ export function NoteDetail() {
     <section className="note-workspace" aria-label="Note reader">
       <div className="note-commandbar"><Link to={context ? `/courses/${context}?tab=notes` : '/notes'} className="note-back-link">{context ? 'Back to course' : 'All notes'}</Link><div className="note-mode-switch" role="group" aria-label="Note mode"><Link to={`/notes/${note._id}/edit${context ? `?course=${context}` : ''}`}>Edit</Link><span aria-current="page">Read</span></div><Link className="btn primary" to={`/notes/${note._id}/edit${context ? `?course=${context}` : ''}`}><Icon name="note" size={16} />Edit note</Link></div>
       <div className="note-contextbar">{book ? <Link className="note-related-book" to={`/books/${book._id}`}><Icon name="book" size={16} />{book.title}</Link> : <span>Personal notebook</span>}<span className="note-context-hint">{saved ? `Saved ${new Date(saved).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}` : 'Saved note'}</span></div>
+      <IndexingPanel key={note.updatedAt} kind="notes" id={note._id} />
       <div className="note-reader-courses"><CourseBadges courses={effectiveCourses(note)} /></div>
       <div className="note-canvas"><article className="note-paper is-reading" aria-label="Note document"><div className="note-paper-kicker"><span>{book?.title || 'Personal notebook'}</span><span>Reading mode</span></div><h2 className="note-document-title">{note.title}</h2><NoteDocument content={note.content} contentHtml={note.contentHtml} /><footer className="note-paper-footer"><span>{wordCount(note.content)} words</span><span>Classmate · Notes</span></footer></article></div>
       <div className="note-bottom-bar"><span>Read, reflect, make a connection.</span><Link to={`/notes/${note._id}/edit${context ? `?course=${context}` : ''}`}>Continue writing <span aria-hidden="true">→</span></Link></div>

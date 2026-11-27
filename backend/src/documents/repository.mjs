@@ -6,17 +6,17 @@ export class DocumentRepository {
 
   async create(values) { return (await this.model.create(values)).toObject(); }
   async list(user, before, limit, filter = {}) {
-    return this.model.find({ ...filter, user, ...(before && { _id: { $lt: before } }) }).sort({ _id: -1 }).limit(limit).lean();
+    return this.model.find({ ...filter, status: { $ne: 'deleted' }, user, ...(before && { _id: { $lt: before } }) }).sort({ _id: -1 }).limit(limit).lean();
   }
-  async get(user, id) { return this.model.findOne({ _id: id, user }).lean(); }
+  async get(user, id) { return this.model.findOne({ _id: id, user, status: { $ne: 'deleted' } }).lean(); }
 
   async markDeleting(user, id) {
-    return this.model.findOneAndUpdate({ _id: id, user }, {
+    return this.model.findOneAndUpdate({ _id: id, user, status: { $ne: 'deleted' } }, {
       $set: { status: 'deleting', validationToken: null, validationLeaseUntil: null },
     }, { new: true, runValidators: true }).lean();
   }
 
-  async remove(user, id) { return this.model.deleteOne({ _id: id, user, status: 'deleting' }); }
+  async remove(user, id) { return this.model.updateOne({ _id: id, user, status: 'deleting' }, { $set: { status: 'deleted', deletedAt: new Date() } }); }
 
   async claim(user, id, token, now, leaseUntil) {
     return this.model.findOneAndUpdate({
@@ -27,7 +27,7 @@ export class DocumentRepository {
   }
 
   async finalize(user, id, token, values, now = new Date()) {
-    return this.model.findOneAndUpdate({ _id: id, user, status: 'validating', validationToken: token }, {
+    return this.model.findOneAndUpdate({ _id: id, user, status: 'validating', validationToken: token, validationLeaseUntil: { $gt: now } }, {
       $set: { ...values, status: 'uploaded', validationToken: null, validationLeaseUntil: null, error: null,
         indexing: createIndexingJob(user, values.sourceVersion, now) },
     }, { new: true, runValidators: true }).lean();

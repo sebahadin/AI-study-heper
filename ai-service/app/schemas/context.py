@@ -10,6 +10,7 @@ class SourceReference(Contract):
     source_type: Literal["document", "note"]
     source_version: Text
     book_id: Text | None = None
+    index_generation: Text | None = None
 
 
 class AuthorizedScope(Contract):

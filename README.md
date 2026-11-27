@@ -8,7 +8,7 @@ Classmate is a personal study app for books, notes, multiple-choice flashcards, 
 frontend/          React pages, components, styles, and tests
 backend/src/       Express app, Passport configuration, models, and API routes
 backend/test/      Unit tests and HTTP integration tests
-ai-service/        Internal Python API for PDF validation and future AI workflows
+ai-service/        Internal Python API, local embeddings, indexing worker and shared Chroma client
 documentation/     Existing screenshots and app diagrams
 ```
 
@@ -25,29 +25,27 @@ Use Node.js 22.12+ or 24 and a local MongoDB instance or MongoDB Atlas database.
 
 2. Create `backend/.env` from `backend/.env.example`. Set `DSN` to your MongoDB connection string and `SESSION_SECRET` to a long random value. Existing MongoDB collections, document IDs, usernames, and password hashes remain compatible.
 
-3. For PDF uploads, configure the shared `AI_SERVICE_TOKEN` and `R2_ACCOUNT_ID`, `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY` in the ignored repository-root `.env`. Start the PDF validator from the repository root:
+3. Configure the shared `AI_SERVICE_TOKEN` and `R2_ACCOUNT_ID`, `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY` in the ignored repository-root `.env`. Keep the R2 bucket private and allow the React development origin in its upload CORS policy. Install Python dependencies:
 
    ```sh
-   uv run --directory ai-service --locked uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8001
+   uv sync --directory ai-service --locked
    ```
 
-   The command installs the locked Python dependencies on first run. Keep this terminal running; uploads require the validator on port 8001. Its health check is `http://127.0.0.1:8001/health`.
-
-4. In another terminal, start the API:
+4. Start the complete local stack from the repository root:
 
    ```sh
-   npm run dev --prefix backend
+   node scripts/dev.mjs
    ```
 
-5. In a third terminal, start React:
-
-   ```sh
-   npm run dev --prefix frontend
-   ```
+   This starts Express, React, the internal Python API, a private Chroma server, and the indexing worker. Start MongoDB separately. Stop any previous copies of these services first; the launcher checks its ports and stops all of its children together on Ctrl+C. The first worker run downloads the pinned local embedding model; later runs use its ignored cache. Restart the stack after changing Python code or indexing settings.
 
 Open `http://127.0.0.1:5173`. Vite uses port 5173 and reports an error if it is occupied instead of silently switching to another port. If another copy of this frontend is already running, use that copy or stop it before starting a new one. R2 browser uploads require the exact frontend origin in the bucket's CORS policy; changing the port also requires updating that policy. Vite proxies `/api` to Express on port 3000. To change the proxy target, copy `frontend/.env.example` to `frontend/.env` and set `API_PROXY_TARGET`. Keep database credentials and session secrets only in the backend environment.
 
 If the Express port changes, update the Vite proxy target too. Set `CLIENT_ORIGIN` to the browser-facing frontend origin. Separate production origins would also require an explicit cookie/CORS configuration; the default setup serves the UI and API from one origin.
+
+PDFs and saved notes are indexed automatically. Open a material to see **Queued**, **Processing**, **Ready**, or an actionable failure with **Retry indexing**. Editing note text queues a new version. Removing a material immediately revokes access; the worker cleans up retrieval data and expired upload objects in the background. PDFs without extractable text remain readable, but need OCR support before they can be searched. The five-page policy is `MAX_PDF_PAGES` in `ai-service/app/core/constants.py`.
+
+Background verification requeues materials if their published Chroma passages are missing or corrupt. The worker uses local Hugging Face embeddings, with no LLM calls or remote embedding charges. MongoDB stores authoritative job state and canonical passages. Chroma and the worker outbox live in ignored `ai-service/.cache/`. In production, run the Chroma server and worker as supervised processes with persistent private storage. Keep Chroma off the public internet and restrict Express's `/internal/` endpoints to your services.
 
 ## Production build
 
@@ -70,7 +68,7 @@ Express serves `frontend/dist` and supports direct navigation and refresh on Rea
 - View books, notes, and flashcard counts on the dashboard.
 - Confirm deletions. Deleting a book unlinks its notes and removes its flashcard tags while preserving both. Cards with no remaining books stay available for editing or removal.
 
-Quiz scores stay in browser memory and are not persisted. The existing favorite flag is preserved in MongoDB, without adding a new favorite control. AI functionality is deferred.
+Quiz scores stay in browser memory and are not persisted. The existing favorite flag is preserved in MongoDB, without adding a new favorite control. AI chat, generation, and coaching are planned.
 
 ## API
 

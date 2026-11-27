@@ -11,6 +11,7 @@ import { PageHeader } from '../../components/PageElements';
 import { ItemActions } from '../../components/ItemActions';
 import { Icon } from '../../components/Icon';
 import '../../styles/documents.css';
+import { IndexingPanel } from '../../components/indexing/IndexingPanel';
 
 export function DocumentDetail() {
   const { id } = useParams();
@@ -48,6 +49,7 @@ export function DocumentDetail() {
       <div className="actions">{item.status === 'uploaded' ? <a className="btn primary" href={`/api/documents/${item._id}/file`} target="_blank" rel="noopener noreferrer"><Icon name="eye" size={18} />Open PDF<span className="sr-only"> (new tab)</span></a> : ['awaiting_upload', 'validating'].includes(item.status) ? <button className="btn primary" disabled={busy} onClick={check}><Icon name="check" size={18} />{busy ? 'Checking…' : 'Check upload'}</button> : null}{item.status !== 'deleting' && <Link className="btn secondary" to={`/documents/upload${newUpload.size ? `?${newUpload}` : ''}`}>{item.status === 'uploaded' ? 'Upload another PDF' : 'Start a new upload'}</Link>}</div>
       <dl className="document-file-facts"><div><dt>Pages</dt><dd>{item.pageCount ?? 'Not checked yet'}</dd></div><div><dt>File size</dt><dd>{item.byteCount ? fileSize(item.byteCount) : 'Not confirmed yet'}</dd></div><div><dt>Added</dt><dd>{new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</dd></div></dl>
     </div></section>
+    {item.status === 'uploaded' && <IndexingPanel kind="documents" id={item._id} />}
     <section className="panel document-connections"><header className="panel-heading"><div><span className="eyebrow">Follow the subject</span><h3>Connected study materials</h3></div><Icon name="connections" size={24} /></header>{options.loading ? <p role="status">Loading connections…</p> : options.error ? <><ErrorBanner message="Connections could not load." /><button className="btn secondary small" onClick={options.reload}>Retry connections</button></> : <><CourseBadges courses={courses} /><div className="document-connection-links">{book && <Link to={`/books/${book._id}`}><Icon name="book" size={23} /><span><small>Related book</small><strong>{book.title}</strong></span></Link>}{note && <Link to={`/notes/${note._id}`}><Icon name="note" size={23} /><span><small>Related note</small><strong>{note.title}</strong></span></Link>}</div>{!courses.length && !book && !note && <p>This is an independent PDF in your library. It doesn’t need a book or course.</p>}</>}
     </section>
   </>;

@@ -13,7 +13,9 @@ export function DocumentBadge({ status }: { status: StudyDocument['status'] }) {
 
 export function DocumentCard({ document, options, onRemoved }: { document: StudyDocument; options?: DocumentOptions | null; onRemoved?: () => void }) {
   return <article className="document-card" aria-label={document.title}>
-    <div className="document-card-top"><DocumentBadge status={document.status} />{onRemoved && <ItemActions kind="document" title={document.title} deletePath={`/documents/${document._id}`} onDeleted={onRemoved} description="This removes the PDF and its document record. Your books, courses, and notes will stay." />}</div>
+    <div className="document-card-top">{document.status === 'uploaded' && document.indexing && ['queued', 'processing', 'ready', 'failed'].includes(document.indexing.status)
+      ? <span className="document-status">{({ queued: 'Queued', processing: 'Processing', ready: 'Ready', failed: 'Indexing needs attention' } as Record<string, string>)[document.indexing.status]}</span>
+      : <DocumentBadge status={document.status} />}{onRemoved && <ItemActions kind="document" title={document.title} deletePath={`/documents/${document._id}`} onDeleted={onRemoved} description="This removes the PDF and its document record. Your books, courses, and notes will stay." />}</div>
     <Link className="document-card-main" to={`/documents/${document._id}`}>
       <div className="document-paper" aria-hidden="true"><span className="document-paper-label">PDF</span><i /><i /><i /><span className="document-paper-pages">{document.pageCount ? `${document.pageCount} ${document.pageCount === 1 ? 'page' : 'pages'}` : 'Study material'}</span></div>
       <h3>{document.title}</h3><p className="document-filename">{document.filename}</p>

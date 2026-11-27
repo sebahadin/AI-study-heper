@@ -1,0 +1,8 @@
+.indexing-panel { display:flex; align-items:flex-start; gap:.8rem; padding:1rem 1.2rem; margin:1.25rem 0; border:1px solid var(--border); border-radius:.9rem; background:var(--surface-inset); }
+.indexing-panel > svg { flex-shrink:0; color:var(--primary); margin-top:.1rem; }
+.indexing-copy { flex:1; min-width:0; }
+.indexing-copy strong { display:block; color:var(--text); font-size:.9375rem; }
+.indexing-copy p { margin:.35rem 0 0; color:var(--muted); line-height:1.6; font-size:.875rem; }
+.indexing-panel--failed { border-color:color-mix(in srgb,var(--border),#b87954 35%); }
+.indexing-panel--ready > svg { color:var(--primary); }
+@media(max-width:600px) { .indexing-panel { flex-wrap:wrap; padding:1rem; }.indexing-panel > .btn { margin-left:2rem; } }

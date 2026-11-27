@@ -24,6 +24,18 @@ async function rejects(operation, status, code) {
 }
 
 describe('R2 adapter', () => {
+  it('lists every page within the exact source prefix for cleanup', async () => {
+    const calls = [];
+    const storage = new R2Storage(configuration, { client: { async send(command) {
+      calls.push(command.input);
+      return command.input.ContinuationToken ? { Contents: [{ Key: 'documents/owner/id/old-2', LastModified: new Date(0) }] }
+        : { IsTruncated: true, NextContinuationToken: 'next-page', Contents: [{ Key: 'documents/owner/id/old-1', LastModified: new Date(0) }] };
+    } } });
+    expect((await storage.list('documents/owner/id/')).map(item => item.key)).to.deep.equal(['documents/owner/id/old-1', 'documents/owner/id/old-2']);
+    expect(calls).to.have.length(2);
+    expect(calls[1]).to.include({ Prefix: 'documents/owner/id/', ContinuationToken: 'next-page' });
+  });
+
   it('signs short-lived read access to one private object', async () => {
     const storage = new R2Storage(configuration);
     try {

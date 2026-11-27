@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 
 from app.api.documents import router as documents_router
+from app.api.retrieval import router as retrieval_router
 from app.api.health import internal_router, router
 from app.core.config import Settings
 from app.core.errors import install_error_handlers
@@ -21,4 +22,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(router)
     app.include_router(internal_router)
     app.include_router(documents_router)
+    app.include_router(retrieval_router)
     return app

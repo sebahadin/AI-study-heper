@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field, StringConstraints
+from pydantic import Field, StringConstraints, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.config import ROOT_ENV_FILE
@@ -24,3 +24,8 @@ class RetrievalSettings(BaseSettings):
     embedding_local_files_only: bool = False
     embedding_cache_path: Path = SERVICE_ROOT / ".cache" / "models"
     chroma_path: Path = SERVICE_ROOT / ".cache" / "chroma"
+
+    chroma_host: str = "127.0.0.1"
+    chroma_port: int = 8002
+    chroma_ssl: bool = False
+    chroma_token: SecretStr | None = None

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { randomUUID } from 'node:crypto';
 import { Book, Note } from '../db.mjs';
 import { courseFields } from '../course-materials.mjs';
+import { publicIndexing } from './indexing-policy.mjs';
 import { DocumentError } from './errors.mjs';
 import { documentFilter, documentOptions } from './filters.mjs';
 
@@ -44,6 +45,7 @@ export async function resolveDocumentAssociations(body, user) {
 
 export function publicDocument(document) {
   return {
+    indexing: publicIndexing(document),
     _id: String(document._id), title: document.title, filename: document.filename,
     status: document.status, courses: (document.courses || []).map(String),
     book: document.book ? String(document.book) : null, note: document.note ? String(document.note) : null,

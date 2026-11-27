@@ -152,3 +152,5 @@ class LocalHuggingFaceEmbeddings:
             raise
         except Exception:
             raise APIError(503, "embedding_unavailable", "Local embeddings are temporarily unavailable.") from None
+
+    embed_prepared_source = embed_prepared_pdf

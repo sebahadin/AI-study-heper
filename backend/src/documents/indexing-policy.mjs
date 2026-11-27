@@ -34,13 +34,13 @@ export function createIndexingJob(user, sourceVersion, now) {
 
 export const leaseHash = token => createHash('sha256').update(token).digest('hex');
 
-export function publicIndexing(document) {
-  if (document.status !== 'uploaded') {
+export function publicIndexing(document, sourceType = document.filename ? 'document' : 'note') {
+  if ((sourceType === 'document' && document.status !== 'uploaded') || document.deletedAt) {
     return { status: document.status === 'deleting' ? 'cancelled' : 'not_available', error: null, updatedAt: document.updatedAt };
   }
   const job = document.indexing;
   if (!job || String(job.user) !== String(document.user) || job.sourceVersion !== document.sourceVersion) {
     return { status: 'not_requested', error: null, updatedAt: document.updatedAt };
   }
-  return { status: job.status, error: job.error || null, updatedAt: job.updatedAt };
+  return { status: job.status, error: job.error || null, updatedAt: job.updatedAt, pagesWithoutText: job.pagesWithoutText || [] };
 }

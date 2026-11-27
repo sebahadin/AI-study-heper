@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DocumentCard } from '../../components/documents/DocumentCards';
 import { EmptyState, PageHeader, SearchField } from '../../components/PageElements';
@@ -7,7 +7,7 @@ import { Icon } from '../../components/Icon';
 import { useResource } from '../../hooks/useResource';
 import { api, errorMessage } from '../../services/api';
 import { documentQuery } from '../../services/documents';
-import type { DocumentOptions, DocumentPage, StudyDocument } from '../../types';
+import type { DocumentOptions, DocumentPage, StudyDocument, IndexingState } from '../../types';
 import '../../styles/documents.css';
 
 export function DocumentLibrary() {
@@ -22,7 +22,8 @@ export function DocumentLibrary() {
   const [more, setMore] = useState(false);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
-  const reload = () => setRevision(value => value + 1);
+  const reload = useCallback(() => setRevision(value => value + 1), []);
+  const pollCursor = useRef(0);
   useEffect(() => { const timer = setTimeout(() => setQuery(fromUrl), 250); return () => clearTimeout(timer); }, [fromUrl]);
   useEffect(() => {
     let active = true;
@@ -52,6 +53,28 @@ export function DocumentLibrary() {
     setParams(updated, { replace: name === 'q' });
   }
   function clear() { setParams({}); }
+  useEffect(() => {
+    const pending = documents.filter(item => ['queued', 'processing'].includes(item.indexing?.status || ''));
+    if (!pending.length) return;
+    let active = true;
+    let polling = false;
+    const timer = setInterval(async () => {
+      if (polling || document.visibilityState !== 'visible') return;
+      polling = true;
+      const batch = Array.from({ length: Math.min(10, pending.length) }, (_, offset) => pending[(pollCursor.current + offset) % pending.length]);
+      pollCursor.current += batch.length;
+      const updates = await Promise.all(batch.map(async item => {
+        try { return { id: item._id, state: (await api<{ indexing: IndexingState }>(`/documents/${item._id}/indexing`, { signal: AbortSignal.timeout(10000) })).indexing }; }
+        catch { return null; }
+      }));
+      polling = false;
+      if (active) setDocuments(previous => previous.map(item => {
+        const update = updates.find(value => value?.id === item._id);
+        return update ? { ...item, indexing: update.state } : item;
+      }));
+    }, 4000);
+    return () => { active = false; clearInterval(timer); };
+  }, [documents]);
   const uploadQuery = new URLSearchParams();
   for (const key of ['course', 'book', 'note']) { const value = params.get(key); if (value) uploadQuery.set(key, value); }
   const uploadTo = `/documents/upload${uploadQuery.size ? `?${uploadQuery}` : ''}`;

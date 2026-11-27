@@ -20,6 +20,7 @@ class IngestionJob(Contract):
     document_id: Text
     source_version: Text
     storage_key: Text
+    source_type: Literal["document", "note"] = "document"
     limits: PdfLimits
 
 

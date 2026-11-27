@@ -56,6 +56,17 @@ describe('Document worker HTTP boundary', () => {
     expect(calls).to.equal(0);
   });
 
+  it('accepts full bounded reconciliation batches and authenticates before parsing', async () => {
+    let checked = 0;
+    const service = { maintenance: { async check(records) { checked = records.length; return { stale: [] }; } } };
+    const reconcileApp = createApp({ internalServiceToken: token, documentJobsService: service });
+    const records = Array.from({ length: 100 }, () => ({ source_id: 'a'.repeat(24), user_id: 'b'.repeat(24), source_version: randomUUID(),
+      generation_id: randomUUID(), source_type: 'document', embedding_model: 'model-' + 'c'.repeat(120) }));
+    await request(reconcileApp).post('/internal/document-jobs/reconcile').send({ records }).expect(401);
+    await request(reconcileApp).post('/internal/document-jobs/reconcile').set(auth).send({ records }).expect(200);
+    expect(checked).to.equal(100);
+  });
+
   it('fails closed for missing configuration and hides unexpected service errors', async () => {
     const disabled = createApp({ internalServiceToken: '', documentJobsService: { claim() { throw new Error('Must not call'); } } });
     await request(disabled).post('/internal/document-jobs/claim').set(auth).send({}).expect(503);
@@ -119,7 +130,7 @@ integration('Durable document jobs with MongoDB (requires TEST_DSN)', () => {
   it('queues the exact validated source atomically with upload finalization', async () => {
     const doc = await document({ indexing: false, status: 'validating' });
     const validationToken = randomUUID();
-    await Document.updateOne({ _id: doc._id }, { validationToken });
+    await Document.updateOne({ _id: doc._id }, { validationToken, validationLeaseUntil: new Date(now.getTime() + INDEXING_LEASE_MS) });
     const uploaded = await new DocumentRepository().finalize(user._id, doc._id, validationToken, {
       objectKey: doc.objectKey, sourceVersion: doc.sourceVersion, pageCount: 2, byteCount: 100, sha256: doc.sha256,
     }, now);

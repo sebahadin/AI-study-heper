@@ -404,3 +404,34 @@ async def test_langchain_embedding_normalization_keeps_original_passage_text_and
     assert model._model.seen == ["First line. Second line."]
     assert chunks[0].passage.text == "First line.\nSecond line."
     assert chunks[0].passage.citation == document.chunks[0].passage.citation
+
+
+async def test_background_audit_detects_missing_or_changed_canonical_passages(tmp_path):
+    from app.workers.documents import manifest_digest
+    ref = source().model_copy(update={"index_generation": "generation-1"})
+    ctx = context(sources=[ref])
+    chunk = embedded(ref)
+    index = ChromaIndex(path=tmp_path, embedding_model="model-v1", dimension=3)
+    await index.upsert_chunks([chunk], context=ctx)
+    candidate = {"source_id": ref.source_id, "source_type": ref.source_type, "user_id": ctx.user_id,
+                 "source_version": ref.source_version, "generation_id": ref.index_generation,
+                 "chunk_ids": [chunk.passage.citation.chunk_id], "manifest_digest": manifest_digest([chunk.passage.model_dump(mode="json")])}
+    assert await index.audit_source(candidate) is True
+    collection = index._get_collection()
+    physical = collection.get()["ids"][0]
+    collection.update(ids=[physical], documents=["Corrupt stored text"], embeddings=[list(chunk.embedding)])
+    assert await index.audit_source(candidate) is False
+    await index.upsert_chunks([chunk], context=ctx)
+    assert await index.audit_source(candidate) is True
+    collection.delete(ids=[physical])
+    assert await index.audit_source(candidate) is False
+
+
+async def test_audit_outage_is_not_misreported_as_missing_data(tmp_path, monkeypatch):
+    index = ChromaIndex(path=tmp_path, embedding_model="model-v1", dimension=3)
+    def unavailable(): raise ConnectionError("private-server-details")
+    monkeypatch.setattr(index, "_get_collection", unavailable)
+    with pytest.raises(APIError) as error:
+        await index.audit_source({"user_id": "owner", "source_id": "id", "source_type": "document", "source_version": "v1", "generation_id": "g1"})
+    assert error.value.code == "index_unavailable"
+    assert "private-server-details" not in str(error.value)

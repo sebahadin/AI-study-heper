@@ -28,7 +28,7 @@ def prepare_pdf(
     parsing these contracts does not establish ownership. No browser-provided
     identity, URL, storage key, or model-generated scope is accepted here.
     Empty scopes deny preparation. This never writes MongoDB or Chroma, or
-    reports indexing completion. The future worker supplies the R2 bytes.
+    reports indexing completion. The worker supplies the R2 bytes.
     """
     if snapshot.source not in context.scope.sources:
         raise APIError(403, "source_outside_scope", "This document version is not authorized for this operation.")

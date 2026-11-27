@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DocumentError } from '../documents/errors.mjs';
 import { readBoundedBody } from './bounded-body.mjs';
@@ -73,6 +73,22 @@ export class R2Storage {
         Bucket: this.configuration.bucket, Key: key, Body: data,
         ContentType: 'application/pdf', ContentLength: data.length,
       }), { abortSignal: AbortSignal.timeout(20000) });
+    } catch { throw unavailable(); }
+  }
+
+  async list(prefix) {
+    try {
+      const objects = [];
+      let continuation;
+      do {
+        const result = await this.configuredClient().send(new ListObjectsV2Command({
+          Bucket: this.configuration.bucket, Prefix: prefix, MaxKeys: 1000, ContinuationToken: continuation,
+        }), { abortSignal: AbortSignal.timeout(10000) });
+        objects.push(...(result.Contents || []).map(object => ({ key: object.Key, modifiedAt: object.LastModified })));
+        continuation = result.IsTruncated ? result.NextContinuationToken : undefined;
+        if (result.IsTruncated && !continuation) { throw unavailable(); }
+      } while (continuation);
+      return objects;
     } catch { throw unavailable(); }
   }
 

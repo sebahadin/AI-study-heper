@@ -1,4 +1,8 @@
 import express from 'express';
+import { randomUUID } from 'node:crypto';
+import { createIndexingJob } from '../documents/indexing-policy.mjs';
+import { createDocumentJobService } from '../documents/job-service.mjs';
+import { emptyJobBody } from './document-jobs.mjs';
 import { noteConnections } from '../material-connections.mjs';
 import mongoose from 'mongoose';
 import { Note, Book } from '../db.mjs';
@@ -41,17 +45,31 @@ router.get('/:id', async (req, res) => {
   res.json({ note, related });
 });
 router.patch('/:id', async (req, res) => {
+  const existing = await Note.findOne({ _id: req.params.id, user: req.user._id }).select('+sourceVersion');
+  if (!existing) { throw new HttpError(404, 'Note not found.'); }
+  const fields = await noteFields(req.body, req.user._id, true);
+  const changed = ['title', 'content'].some(field => Object.hasOwn(fields, field) && fields[field] !== existing[field]);
+  if (changed) {
+    fields.sourceVersion = randomUUID();
+    fields.indexing = createIndexingJob(req.user._id, fields.sourceVersion, new Date());
+  }
   const note = await Note.findOneAndUpdate(
-    { _id: req.params.id, user: req.user._id },
-    { $set: { ...await noteFields(req.body, req.user._id, true), updatedAt: new Date() } },
-    { new: true, runValidators: true },
+    { _id: req.params.id, user: req.user._id, sourceVersion: existing.sourceVersion ?? { $exists: false } },
+    { $set: { ...fields, updatedAt: new Date() } }, { new: true, runValidators: true },
   );
-  if (!note) { throw new HttpError(404, 'Note not found.'); }
+  if (!note) { throw new HttpError(409, 'This note changed. Refresh before saving again.'); }
   res.json({ note });
 });
+router.get('/:id/indexing', async (req, res) => res.json({ indexing: await createDocumentJobService('note').status(req.user._id, req.params.id) }));
+router.post('/:id/indexing/retry', async (req, res) => {
+  emptyJobBody(req.body);
+  res.json({ indexing: await createDocumentJobService('note').retry(req.user._id, req.params.id) });
+});
 router.delete('/:id', async (req, res) => {
-  const result = await Note.deleteOne({ _id: req.params.id, user: req.user._id });
-  if (!result.deletedCount) { throw new HttpError(404, 'Note not found.'); }
+  const result = await Note.findOneAndUpdate({ _id: req.params.id, user: req.user._id }, {
+    $set: { deletedAt: new Date(), cleanupAfter: new Date() },
+  });
+  if (!result) { throw new HttpError(404, 'Note not found.'); }
   res.status(204).end();
 });
 export default router;

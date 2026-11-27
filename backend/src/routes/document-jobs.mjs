@@ -44,8 +44,33 @@ export function createDocumentJobsRouter(service, { token } = {}) {
     }
     next();
   });
-  router.use(express.json({ limit: '16kb' }));
+  const small = express.json({ limit: '16kb' });
+  const publication = express.json({ limit: '3mb' });
+  const reconciliation = express.json({ limit: '128kb' });
+  router.use((req, res, next) => ((req.path.endsWith('/complete') || req.path === '/passages') ? publication : req.path === '/reconcile' ? reconciliation : small)(req, res, next));
   router.param('jobId', (_req, _res, next, value) => next(uuid(value) ? undefined : invalid()));
+  router.post('/passages', async (req, res) => res.json(await service.passages(req.body)));
+  router.post('/maintenance', async (req, res) => {
+    if (typeof req.body?.embedding_model !== 'string' || req.body.embedding_model.length > 1024) { throw invalid(); }
+    const profile = service.profile ? await service.profile() : null;
+    if (profile && profile.embedding_model !== req.body.embedding_model) {
+      throw new DocumentError(409, 'index_model_mismatch', 'Use the active embedding configuration.');
+    }
+    res.json(await service.maintenance.prepare(req.body.embedding_model, profile?.index_version));
+  });
+  router.post('/audit/candidates', async (req, res) => {
+    if (typeof req.body?.embedding_model !== 'string' || req.body.embedding_model.length > 1024) { throw invalid(); }
+    res.json(await service.maintenance.auditCandidates(req.body.embedding_model));
+  });
+  router.post('/audit/result', async (req, res) => res.json(await service.maintenance.auditResult(req.body)));
+  router.post('/reconcile', async (req, res) => res.json(await service.maintenance.check(req.body?.records)));
+  router.post('/cleanup/claim', async (req, res) => {
+    emptyJobBody(req.body);
+    const cleanup = await service.maintenance.claimCleanup();
+    if (!cleanup) { return res.status(204).end(); }
+    res.json(cleanup);
+  });
+  router.post('/cleanup/complete', async (req, res) => res.json(await service.maintenance.finishCleanup(req.body || {})));
   router.post('/claim', async (req, res) => {
     emptyJobBody(req.body);
     const job = await service.claim();
@@ -59,6 +84,10 @@ export function createDocumentJobsRouter(service, { token } = {}) {
   router.post('/:jobId/source', async (req, res) => {
     const body = leaseBody(req.body);
     res.json(await service.source(req.params.jobId, body.lease_token));
+  });
+  router.post('/:jobId/complete', async (req, res) => {
+    if (!req.body || !uuid(req.body.lease_token)) { throw invalid(); }
+    res.json(await service.complete(req.params.jobId, req.body));
   });
   router.post('/:jobId/fail', async (req, res) => {
     const body = leaseBody(req.body, true);
