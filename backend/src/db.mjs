@@ -171,3 +171,35 @@ documentSchema.index({ 'indexing.jobId': 1 }, {
 });
 const Document = mongoose.model('Document', documentSchema);
 export { User, Course, Book, Note, Flashcard, Document };
+
+
+const chatCitationSchema = new mongoose.Schema({
+    number: Number, chunk_id: String, source: mongoose.Schema.Types.Mixed,
+    locator: String, page_start: Number, page_end: Number, title: String, href: String,
+}, { _id: false });
+const chatMessageSchema = new mongoose.Schema({
+    id: { type: String, required: true }, requestId: String, sequence: Number,
+    role: { type: String, enum: ['user', 'assistant'], required: true },
+    content: { type: String, default: '' },
+    status: { type: String, enum: ['completed', 'generating', 'cancelled', 'failed', 'interrupted'], required: true },
+    mode: { type: String, default: 'pending' }, citations: { type: [chatCitationSchema], default: [] },
+    model: String, usage: mongoose.Schema.Types.Mixed, errorCode: String,
+    createdAt: { type: Date, default: Date.now },
+}, { _id: false });
+const chatRunSchema = new mongoose.Schema({
+    id: String, requestId: String, assistantId: String, userMessageId: String, leaseUntil: Date,
+}, { _id: false });
+const conversationSchema = new mongoose.Schema({
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    title: { type: String, default: 'New conversation', maxlength: 100 },
+    selection: { type: mongoose.Schema.Types.Mixed, required: true },
+    topic: { type: String, default: '', maxlength: 120 },
+    allowGeneral: { type: Boolean, default: false },
+    messages: { type: [chatMessageSchema], default: [] }, messageCount: { type: Number, default: 0 },
+    activeRun: { type: chatRunSchema, default: null, select: false }, revision: { type: Number, default: 0 },
+}, { timestamps: true });
+conversationSchema.index({ user: 1, updatedAt: -1 });
+const chatQuotaSchema = new mongoose.Schema({ _id: String, count: { type: Number, default: 0 }, expiresAt: Date });
+chatQuotaSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+export const Conversation = mongoose.model('Conversation', conversationSchema);
+export const ChatQuota = mongoose.model('ChatQuota', chatQuotaSchema);

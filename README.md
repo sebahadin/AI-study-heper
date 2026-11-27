@@ -47,6 +47,18 @@ PDFs and saved notes are indexed automatically. Open a material to see **Queued*
 
 Background verification requeues materials if their published Chroma passages are missing or corrupt. The worker uses local Hugging Face embeddings, with no LLM calls or remote embedding charges. MongoDB stores authoritative job state and canonical passages. Chroma and the worker outbox live in ignored `ai-service/.cache/`. In production, run the Chroma server and worker as supervised processes with persistent private storage. Keep Chroma off the public internet and restrict Express's `/internal/` endpoints to your services.
 
+## Study chat
+
+Open **Study chat** in the navigation or **Ask Classmate** inside a note, PDF, book, or course. Choose your study scope and ask a question. Book and course scopes include linked notes and PDFs; a book record alone does not contain readable book text. Materials need a Ready index status before chat can use them.
+
+Answers stream as provisional drafts, then their citation references are checked against current authorized passages before the final answer is saved. Click a numbered source to read the cited passage and open its original note or PDF page. Questions unsupported by the selected material receive an explicit acknowledgment. General explanations require opting in under **Study scope** and are labeled separately. Retrieved text cannot expand the assistant's permissions. This stage has read-only tools: it does not save generated decks/quizzes or change study materials.
+
+Conversations and messages live in MongoDB and remain across refresh, logout, and service restarts until you delete the conversation. Each conversation allows 100 turns; starting another preserves the old history. Only a bounded recent history is sent to the model. Stopped or interrupted replies keep your question and provide a retry; partial text is not saved as a completed answer. Editing/deleting a source disables its old quote preview while preserving the historical answer. Deleting a conversation permanently removes its messages.
+
+Python reads existing `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` server-side from `backend/.env` and the repository-root `.env` (root values take precedence; environment variables override both). The default provider is OpenAI with `gpt-6-luna` for routing and tutoring, reasoning disabled. `AI_CHAT_PROVIDER`, `AI_CHAT_MODEL`, and `AI_CHAT_ROUTER_MODEL` can select other available models; see `ai-service/.env.example`. Local Hugging Face embeddings continue to run on your server; the chosen chat provider receives only necessary retrieved excerpts, your question, and bounded recent conversation context. LangSmith tracing is disabled for this workflow.
+
+Default limits are 4,000 characters per question, 8,000 input tokens per model call, 1,500 output tokens for the answer, two retrieval tool calls, and a 90-second Python turn deadline. Express enforces configurable daily quotas of 50 turns per user and 200 across the app (`AI_CHAT_DAILY_TURNS` / `AI_CHAT_GLOBAL_DAILY_TURNS`); failed/cancelled turns also count. Provider retries and automatic upgrades to more expensive models are disabled. Restart the stack after changing model configuration. Keep API keys and `AI_SERVICE_TOKEN` out of React configuration.
+
 ## Production build
 
 ```sh
@@ -66,13 +78,14 @@ Express serves `frontend/dist` and supports direct navigation and refresh on Rea
 - Create and edit flashcards with two to four answer options, one correct answer, and related book tags and/or courses.
 - Filter collections by course, including materials with no course. Start a quiz from a course or any selected books, answer questions, review mistakes, end early, and retry.
 - View books, notes, and flashcard counts on the dashboard.
+- Discuss indexed notes and PDFs in Study chat. Select individual materials, books, courses, or your library; add a topic focus; read streamed answers with verified source previews; stop a response; and reopen saved conversations.
 - Confirm deletions. Deleting a book unlinks its notes and removes its flashcard tags while preserving both. Cards with no remaining books stay available for editing or removal.
 
-Quiz scores stay in browser memory and are not persisted. The existing favorite flag is preserved in MongoDB, without adding a new favorite control. AI chat, generation, and coaching are planned.
+Quiz scores stay in browser memory and are not persisted. The existing favorite flag is preserved in MongoDB, without adding a new favorite control. Study chat is available; saved AI generation tools and personalized coaching are later stages.
 
 ## API
 
-All endpoints return JSON, except successful logout and deletions, which return HTTP 204. Authentication uses an HttpOnly session cookie. Request bodies use JSON; API clients must send the cookie on authenticated requests.
+Endpoints return JSON, except chat answer streams (server-sent events), PDF file redirects, and successful logout/deletions (HTTP 204). Authentication uses an HttpOnly session cookie. Request bodies use JSON; API clients must send the cookie on authenticated requests.
 
 | Endpoint | Methods | Purpose |
 | --- | --- | --- |
@@ -87,6 +100,12 @@ All endpoints return JSON, except successful logout and deletions, which return 
 | `/api/notes` and `/api/notes/:id` | GET, POST / GET, PATCH, DELETE | Note management |
 | `/api/flashcards` and `/api/flashcards/:id` | GET, POST / GET, PATCH, DELETE | Flashcard management |
 | `/api/study/search` | POST | Retrieve authorized passages with citations and source links |
+| `/api/chat` | GET, POST | Paginated owned conversations / create a scoped conversation |
+| `/api/chat/:id` | GET, PATCH, DELETE | History, scope/title updates, or permanent deletion |
+| `/api/chat/:id/messages` | POST | Stream a reply as server-sent events; requires a UUID requestId |
+| `/api/chat/:id/cancel` | POST | Stop the current run using its runId |
+| `/api/chat/:id/sources/:messageId/:number` | GET | Revalidate and preview a cited passage |
+| `/api/chat/config` and `/api/chat/options` | GET | Chat availability and owned scope choices |
 
 Materials accept an optional `courses` array of owned course IDs; an omitted array preserves membership on PATCH. Filter books, notes, or flashcards with `?course=courseId`, or `?course=none` for materials with no direct or inherited course. Course material assignments accept `{ "kind": "books" | "notes" | "flashcards", "ids": [...] }`; all IDs must belong to the signed-in user. This changes only the selected course’s direct assignments.
 
@@ -96,7 +115,7 @@ Note writes accept `title`, optional `book` (an owned book ID or `null`), and ei
 
 Study search accepts `{ "query": "What supplies energy to cells?", "scope": { "courses": ["courseId"] }, "limit": 6 }`. A scope can select `documents`, `notes`, `books`, and `courses`; their selections are combined. Book/course scopes include their currently linked notes and PDFs. Use `{ "library": true }` explicitly for the whole library. An empty scope returns no passages. Only your current, ready source versions are searched; select a narrower scope if more than 100 indexed sources match.
 
-Search returns `{ "query", "passages", "sources" }`, including PDF page or note paragraph citations and links to the original material. Results contain at most 12 passages and 12,000 characters. This endpoint retrieves evidence; chat answers and the chat interface are the next stage. The internal read tools are `search_materials` and `fetch_passages`; the application supplies their identity and scope.
+Search returns `{ "query", "passages", "sources" }`, including PDF page or note paragraph citations and links to the original material. Results contain at most 12 passages and 12,000 characters. Study chat uses these same retrieval boundaries for its answers. The internal read tools are `search_materials` and `fetch_passages`; the application supplies their identity and scope.
 
 Errors have `{ "error": "message", "fields": { "field": "message" } }`; `fields` is optional. Protected endpoints return HTTP 401; missing or inaccessible records return 404; invalid input returns 400; duplicate registration returns 409. Every record operation and book association is scoped to the authenticated user. Cross-site writes are rejected.
 
@@ -116,4 +135,9 @@ The default backend test run covers validation, cleanup, and HTTP boundaries. To
 TEST_DSN=mongodb://127.0.0.1:27017/classmate_test npm test --prefix backend
 ```
 
-Those integration tests create users and study records, then drop that test database. They are skipped when `TEST_DSN` is not supplied. Frontend tests cover protected navigation, session restore/logout, registration feedback, quiz scoring, retries, and escaped text rendering.
+Those integration tests create users and study records, then drop that test database. They are skipped when `TEST_DSN` is not supplied. Frontend tests cover protected navigation, session restore/logout, registration feedback, quiz scoring, chat history/scope/source UI, split streaming frames, and safe Markdown. Python unit tests run with `uv run --directory ai-service --locked pytest`. The opt-in real-provider chat test uses only synthetic material in a disposable MongoDB/Chroma stack and makes a few billed calls:
+
+```sh
+cd ai-service
+RUN_CHAT_LIVE_TEST=1 uv run --locked pytest tests/integration/test_chat_live.py
+```

@@ -1,3 +1,4 @@
+import { StudyChatLink } from '../../components/StudyChatLink';
 import { NoteConnections } from '../../components/ConnectedMaterials';
 import { LinkedDocuments } from '../../components/documents/DocumentCards';
 import { FlashcardReview } from '../../components/FlashcardReview';
@@ -125,6 +126,7 @@ export function NoteDetail() {
     <section className="note-workspace" aria-label="Note reader">
       <div className="note-commandbar"><Link to={context ? `/courses/${context}?tab=notes` : '/notes'} className="note-back-link">{context ? 'Back to course' : 'All notes'}</Link><div className="note-mode-switch" role="group" aria-label="Note mode"><Link to={`/notes/${note._id}/edit${context ? `?course=${context}` : ''}`}>Edit</Link><span aria-current="page">Read</span></div><Link className="btn primary" to={`/notes/${note._id}/edit${context ? `?course=${context}` : ''}`}><Icon name="note" size={16} />Edit note</Link></div>
       <div className="note-contextbar">{book ? <Link className="note-related-book" to={`/books/${book._id}`}><Icon name="book" size={16} />{book.title}</Link> : <span>Personal notebook</span>}<span className="note-context-hint">{saved ? `Saved ${new Date(saved).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}` : 'Saved note'}</span></div>
+      <StudyChatLink kind="note" id={note._id} />
       <IndexingPanel key={note.updatedAt} kind="notes" id={note._id} />
       <div className="note-reader-courses"><CourseBadges courses={effectiveCourses(note)} /></div>
       <div className="note-canvas"><article className="note-paper is-reading" aria-label="Note document"><div className="note-paper-kicker"><span>{book?.title || 'Personal notebook'}</span><span>Reading mode</span></div><h2 className="note-document-title">{note.title}</h2><NoteDocument content={note.content} contentHtml={note.contentHtml} /><footer className="note-paper-footer"><span>{wordCount(note.content)} words</span><span>Classmate · Notes</span></footer></article></div>

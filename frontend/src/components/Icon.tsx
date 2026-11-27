@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 
-export type IconName = 'file' | 'palette' | 'connections' | 'eye' | 'more' | 'edit' | 'trash' | 'shuffle' | 'flip' | 'courses' | 'dashboard' | 'book' | 'note' | 'cards' | 'play' | 'plus' | 'search' | 'chevron' | 'logout' | 'menu' | 'close' | 'check' | 'clock' | 'motion' | 'spark';
+export type IconName = 'chat' | 'send' | 'file' | 'palette' | 'connections' | 'eye' | 'more' | 'edit' | 'trash' | 'shuffle' | 'flip' | 'courses' | 'dashboard' | 'book' | 'note' | 'cards' | 'play' | 'plus' | 'search' | 'chevron' | 'logout' | 'menu' | 'close' | 'check' | 'clock' | 'motion' | 'spark';
 const shapes: Record<IconName, ReactNode> = {
+  chat: <><path d="M20 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-2 2V11.5a9 9 0 0 1 18 0z"/><path d="M7 9h8M7 13h5"/></>,
+  send: <><path d="m3 3 18 9-18 9 4-9zM7 12h14"/></>,
   file: <><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6zM14 3v6h6M8 13h3M8 17h8" /><path d="M14 13h2" /></>,
   palette: <><path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-4 2 2 0 0 1 1-4h2a4 4 0 0 0 4-4c0-4-4-6-9-6z" /><circle cx="7" cy="10" r=".7" /><circle cx="10" cy="7" r=".7" /><circle cx="15" cy="7" r=".7" /></>,
   connections: <><circle cx="5" cy="12" r="3" /><circle cx="18" cy="5" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8 10 7-4M8 14l7 4" /></>,

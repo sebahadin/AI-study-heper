@@ -1,3 +1,5 @@
+import { createChatRouter } from './routes/chat.mjs';
+import { createChatService } from './chat/service.mjs';
 import { createInternalRetrievalRouter, createStudyRouter } from './routes/retrieval.mjs';
 import { createStudySearchService } from './retrieval/service.mjs';
 import express from 'express';
@@ -20,7 +22,7 @@ import { createDocumentsRouter } from './routes/documents.mjs';
 import { createDocumentJobsRouter } from './routes/document-jobs.mjs';
 import { createDocumentJobService } from './documents/job-service.mjs';
 
-export function createApp({ sessionStore, frontendDirectory, documentService, documentJobsService, studySearchService, internalServiceToken = settings.aiServiceToken } = {}) {
+export function createApp({ sessionStore, frontendDirectory, documentService, documentJobsService, studySearchService, chatService, internalServiceToken = settings.aiServiceToken } = {}) {
   const app = express();
   app.disable('x-powered-by');
   if (settings.production) {
@@ -53,6 +55,7 @@ export function createApp({ sessionStore, frontendDirectory, documentService, do
   app.use(passport.initialize());
   app.use(passport.session());
   app.use('/api/auth', authRoutes);
+  app.use('/api/chat', createChatRouter(chatService || createChatService(search)));
   app.use('/api/study', createStudyRouter(search));
   app.use('/api/dashboard', dashboardRoutes);
   app.use('/api/courses', coursesRoutes);

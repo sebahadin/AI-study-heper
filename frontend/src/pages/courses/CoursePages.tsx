@@ -1,3 +1,4 @@
+import { StudyChatLink } from '../../components/StudyChatLink';
 import { LinkedDocuments } from '../../components/documents/DocumentCards';
 import { FlashcardFlip } from '../../components/FlashcardFlip';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -136,6 +137,7 @@ export function CourseDetail() {
   }
   return <>
     <Link className="course-back-link" to="/courses"><Icon name="courses" size={16} />All courses</Link>
+    <StudyChatLink kind="course" id={course._id} />
     <section className={`course-hero course-tone--${course.color} study-course-hero`}>
       <div className="study-course-options"><ItemActions title={course.title} kind="course" editTo={`/courses/${course._id}/edit`} deletePath={`/courses/${course._id}`} description={removeDescription} onDeleted={() => navigate('/courses')} /></div>
       <div className="course-hero-copy"><span className="course-hero-kicker"><Icon name="courses" size={20} />{course.code || 'Your course'}</span><h2>{course.title}</h2><div className="course-hero-meta">{course.term && <span>{course.term}</span>}{course.instructor && <span>{course.instructor}</span>}</div><p>{course.description || 'Your books, notes, and practice. Connected around one subject.'}</p>

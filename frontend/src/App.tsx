@@ -12,6 +12,7 @@ import { FlashcardEditor, FlashcardList } from './pages/flashcards/FlashcardPage
 import { CourseList, CourseEditor, CourseDetail } from './pages/courses/CoursePages';
 import { QuizPage } from './pages/flashcards/QuizPage';
 
+const StudyChat = lazy(() => import('./pages/chat/ChatPage'));
 const NoteDetail = lazy(() => import('./pages/notes/NotePages').then((module) => ({ default: module.NoteDetail })));
 const NoteEditor = lazy(() => import('./pages/notes/NotePages').then((module) => ({ default: module.NoteEditor })));
 const DocumentLibrary = lazy(() => import('./pages/documents/DocumentLibrary').then(module => ({ default: module.DocumentLibrary })));
@@ -33,6 +34,8 @@ export default function App() {
     <Route path="login" element={<AuthPage key="login" />} />
     <Route path="register" element={<AuthPage key="register" register />} />
     <Route element={<ProtectedRoute />}>
+      <Route path="chat" element={<StudyChat />} />
+      <Route path="chat/:id" element={<StudyChat />} />
       <Route path="dashboard" element={<Dashboard />} />
       <Route path="courses" element={<CourseList />} />
       <Route path="courses/add" element={<CourseEditor />} />

@@ -19,6 +19,8 @@ export const settings = {
   sessionSecret: process.env.SESSION_SECRET || randomBytes(32).toString('hex'),
   aiServiceUrl: integrationValue('AI_SERVICE_URL') || 'http://127.0.0.1:8001',
   aiServiceToken: integrationValue('AI_SERVICE_TOKEN'),
+  chatDailyTurns: Math.max(1, Math.min(1000, Number(integrationValue('AI_CHAT_DAILY_TURNS')) || 50)),
+  chatGlobalDailyTurns: Math.max(1, Math.min(10000, Number(integrationValue('AI_CHAT_GLOBAL_DAILY_TURNS')) || 200)),
   r2: {
     accountId: integrationValue('R2_ACCOUNT_ID'),
     bucket: integrationValue('R2_BUCKET_NAME'),

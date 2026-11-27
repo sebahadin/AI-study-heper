@@ -1,27 +1,109 @@
-"""LangGraph composition boundary. No graph or model is executed in this slice."""
-
-from typing import Protocol, TypedDict
-
-from app.schemas.context import ExecutionContext
-from app.schemas.tasks import TaskRequest, TaskResult
-
-
-class ChatState(TypedDict):
-    message: str
-    tasks: tuple[TaskRequest, ...]
-    results: tuple[TaskResult, ...]
-
-
-class ChatWorkflow(Protocol):
-    async def ainvoke(self, state: ChatState, *, context: ExecutionContext) -> ChatState:
-        """Execute the future graph with trusted context outside model-editable state."""
-        ...
+"""Actual LangGraph supervisor/read-tool/tutor workflow; context is executor-owned."""
+from typing import TypedDict
+from contextlib import aclosing
+from langgraph.graph import StateGraph, START, END
+from langgraph.config import get_stream_writer
+from langsmith.run_helpers import tracing_context
+from pydantic import ValidationError
+from app.agents.orchestrator.agent import plan_tasks, compose_response
+from app.agents.tutor.agent import run as run_tutor
+from app.core.errors import APIError
+from app.schemas.evidence import EvidenceBundle
+from app.tools.materials import create_material_tools
 
 
-def build_chat_graph() -> ChatWorkflow:
-    """Compile LangGraph planning, specialist, validation, and composition nodes.
+class ChatState(TypedDict, total=False):
+    plan: object
+    evidence: tuple
+    steps: int
+    answer: str
+    mode: str
+    stats: dict
 
-    Add persistent, user-owned checkpoints and confirmation interrupts when those
-    behaviors are implemented. Do not return an empty graph that appears functional.
-    """
-    raise NotImplementedError("The LangGraph chat workflow is not implemented.")
+
+def build_chat_graph(*, request, models, retriever):
+    tools = {tool.name: tool for tool in create_material_tools(retriever=retriever, context=request.context)}
+
+    async def history_current():
+        current = await retriever._current_context(request.context)
+        allowed = set(current.scope.sources)
+        result = []
+        for message in request.history:
+            if message.role == 'assistant' and any(c.source not in allowed for c in message.citations):
+                result.append(message.model_copy(update={'content': '[Earlier source-based content is unavailable in the current scope.]', 'citations': ()}))
+            else: result.append(message)
+        return tuple(result)
+
+    async def supervisor(state):
+        get_stream_writer()({'type':'status', 'phase':'planning'})
+        plan = await plan_tasks(request, models=models, history=await history_current(), evidence=state['evidence'], steps=state['steps'], stats=state['stats'])
+        return {'plan': plan}
+
+    def next_node(state):
+        if state['plan'].action in ('search_materials', 'fetch_passages') and state['steps'] < 2: return 'read_tools'
+        return 'tutor'
+
+    async def read_tools(state):
+        plan = state['plan']; get_stream_writer()({'type':'status', 'phase':'searching' if plan.action=='search_materials' else 'reading'})
+        try:
+            if plan.action == 'search_materials':
+                result = await tools['search_materials'].ainvoke({'query':plan.query, 'limit':6}, config={'callbacks':[]})
+                passages = EvidenceBundle.model_validate(result).passages
+            else:
+                from app.schemas.evidence import Passage
+                result = await tools['fetch_passages'].ainvoke({'chunk_ids':plan.chunk_ids}, config={'callbacks':[]})
+                passages = tuple(Passage.model_validate(row) for row in result)
+        except (ValidationError, APIError) as error:
+            if isinstance(error, APIError) and error.status_code >= 500: raise
+            passages = ()
+        found = {p.citation.chunk_id: p for p in (*state['evidence'], *passages)}
+        evidence, characters = [], 0
+        for passage in found.values():
+            if len(evidence) < 12 and characters + len(passage.text) <= 12000:
+                evidence.append(passage); characters += len(passage.text)
+        return {'evidence':tuple(evidence), 'steps':state['steps']+1}
+
+    async def tutor(state):
+        writer = get_stream_writer(); plan = state['plan']
+        if plan.action == 'clarify':
+            answer = plan.clarification or 'Which concept or study material would you like me to explain?'
+            mode = 'clarification'; writer({'type':'mode','mode':mode}); writer({'type':'delta','text':answer})
+        elif plan.action == 'unsupported':
+            answer = 'I can discuss and explain your materials here. Saving, editing, or generating library items is not available in study chat yet.'
+            mode = 'clarification'; writer({'type':'mode','mode':mode}); writer({'type':'delta','text':answer})
+        else:
+            writer({'type':'status','phase':'writing'})
+            evidence = await retriever.fetch([p.citation.chunk_id for p in state['evidence']], context=request.context) if state['evidence'] else ()
+            answer, mode = await run_tutor(request, models=models, history=await history_current(), evidence=evidence, stats=state['stats'], emit=writer)
+            return {'answer':answer, 'mode':mode, 'evidence':evidence}
+        return {'answer':answer, 'mode':mode}
+
+    async def verify(state):
+        writer = get_stream_writer(); writer({'type':'status','phase':'checking'})
+        evidence = state['evidence']
+        if evidence:
+            fresh = await retriever.fetch([p.citation.chunk_id for p in evidence], context=request.context)
+            by_id = {p.citation.chunk_id:p for p in fresh}
+            if any(p.citation.chunk_id not in by_id or by_id[p.citation.chunk_id].citation != p.citation for p in evidence):
+                writer({'type':'final', 'answer':'Your study materials changed while I was answering. Please ask again to use the latest version.',
+                    'mode':'insufficient_evidence','citations':[], 'model':models.settings.model,'usage':state['stats']})
+                return {}
+        result = compose_response(state['answer'], state['mode'], evidence, request.allow_general)
+        writer({'type':'final', **result, 'model':models.settings.model, 'usage':state['stats']})
+        return {}
+
+    graph = StateGraph(ChatState)
+    graph.add_node('supervisor', supervisor); graph.add_node('read_tools', read_tools); graph.add_node('tutor', tutor); graph.add_node('verify', verify)
+    graph.add_edge(START, 'supervisor'); graph.add_conditional_edges('supervisor', next_node)
+    graph.add_edge('read_tools','supervisor'); graph.add_edge('tutor','verify'); graph.add_edge('verify',END)
+    return graph.compile()
+
+
+async def stream_chat(*, request, models, retriever):
+    graph = build_chat_graph(request=request, models=models, retriever=retriever)
+    # Never export private prompts/passages to LangSmith, even if globally enabled.
+    with tracing_context(enabled=False):
+        async with aclosing(graph.astream({'evidence':(), 'steps':0, 'stats':{'input_tokens':0,'output_tokens':0}},
+            stream_mode='custom', config={'recursion_limit':12,'callbacks':[]})) as stream:
+            async for event in stream:
+                yield event

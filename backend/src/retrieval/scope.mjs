@@ -1,4 +1,4 @@
-import { Book, Course, Document, Note } from '../db.mjs';
+import { Book, Course, Document, Note, Conversation } from '../db.mjs';
 import { RetrievalError, unavailable } from './errors.mjs';
 
 export const MAX_SCOPE_SOURCES = 100;
@@ -93,6 +93,15 @@ export class StudyScopeResolver {
         || !Array.isArray(context.scope.sources) || context.scope.sources.length > MAX_SCOPE_SOURCES
         || context.scope.sources.some(ref => !plainObject(ref) || !objectId(ref.source_id) || !['note', 'document'].includes(ref.source_type)
           || !['source_version', 'index_generation'].every(key => typeof ref[key] === 'string' && ref[key].length > 0 && ref[key].length <= 200))) { throw invalid(); }
+    if (context.conversation_id) {
+      if (!objectId(context.conversation_id)) { throw invalid(); }
+      const conversation = await Conversation.findOne({ _id: context.conversation_id, user: context.user_id,
+        'activeRun.id': context.run_id, 'activeRun.leaseUntil': { $gt: new Date() },
+      }).select('selection topic').lean();
+      if (!conversation || JSON.stringify(parseSelection(context.scope.selection)) !== JSON.stringify(parseSelection(conversation.selection))) {
+        throw new RetrievalError(404, 'scope_changed', 'This conversation scope is no longer active.');
+      }
+    }
     if (context.scope.selection !== undefined && context.scope.selection !== null) {
       const resolved = await this.resolve(context.user_id, context.scope.selection);
       return { ...context, scope: { ...context.scope, sources: resolved.sources, selection: resolved.selection } };
