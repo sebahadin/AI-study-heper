@@ -76,7 +76,7 @@ try {
   mkdirSync(chromaPath, { recursive: true });
   launch('chroma', chroma, ['run', '--host', '127.0.0.1', '--port', String(ports.chroma), '--path', chromaPath], root);
   await ready(ports.chroma);
-  launch('python', python, ['-m', 'uvicorn', 'app.main:create_app', '--factory', '--host', '127.0.0.1', '--port', String(ports.python), '--no-access-log'], path.join(root, 'ai-service'), { AI_SERVICE_TOKEN: settings.aiServiceToken });
+  launch('python', python, ['-m', 'uvicorn', 'app.main:create_app', '--factory', '--host', '127.0.0.1', '--port', String(ports.python), '--no-access-log'], path.join(root, 'ai-service'), { AI_SERVICE_TOKEN: settings.aiServiceToken, AI_CLASSMATE_URL: `http://127.0.0.1:${ports.express}` });
   launch('express', process.execPath, ['node_modules/nodemon/bin/nodemon.js', 'src/app.mjs'], path.join(root, 'backend'));
   await Promise.all([ready(ports.python), ready(ports.express)]);
   launch('worker', python, ['-m', 'app.workers.documents'], path.join(root, 'ai-service'), {

@@ -1,3 +1,5 @@
+import { CanonicalPassages } from '../retrieval/passages.mjs';
+import { StudyScopeResolver } from '../retrieval/scope.mjs';
 import { randomUUID } from 'node:crypto';
 import { IndexMaintenance } from './maintenance.mjs';
 import { AiPdfClient } from '../integrations/ai-pdfs.mjs';
@@ -149,31 +151,7 @@ export class DocumentJobService {
     });
   }
   async passages(body) {
-    return guarded(async () => {
-      const context = body?.context;
-      const ids = body?.chunk_ids;
-      if (!Array.isArray(ids) || !ids.length || ids.length > 100 || !Array.isArray(context?.scope?.sources)
-          || context.scope.sources.length > 100 || !/^[a-f0-9]{24}$/i.test(context.user_id || '')
-          || ids.some(id => typeof id !== 'string' || !/^[a-z]+-[a-f0-9]{64}$/.test(id))) {
-        throw new DocumentError(400, 'invalid_passage_request', 'Use a bounded set of scoped passage IDs.');
-      }
-      const requested = new Set(ids);
-      const found = new Map();
-      for (const ref of context.scope.sources) {
-        const model = ref.source_type === 'note' ? Note : ref.source_type === 'document' ? Document : null;
-        if (!model || !/^[a-f0-9]{24}$/i.test(ref.source_id || '') || typeof ref.index_generation !== 'string') { continue; }
-        const repository = new DocumentJobRepository(model);
-        const source = await repository.get(context.user_id, ref.source_id);
-        if (!source || source.deletedAt || (model === Document && source.status !== 'uploaded')
-            || source.sourceVersion !== ref.source_version || source.indexing?.sourceVersion !== source.sourceVersion
-            || String(source.indexing.user) !== String(source.user) || source.indexing.status !== 'ready'
-            || source.indexing.activeGeneration !== ref.index_generation) { continue; }
-        for (const passage of source.indexing.passages || []) {
-          if (requested.has(passage.citation.chunk_id)) { found.set(passage.citation.chunk_id, passage); }
-        }
-      }
-      return { passages: ids.filter(id => found.has(id)).map(id => found.get(id)) };
-    });
+    return guarded(() => new CanonicalPassages({ resolver: new StudyScopeResolver({ profile: this.profile }) }).fetch(body));
   }
 
   async complete(jobId, body) {

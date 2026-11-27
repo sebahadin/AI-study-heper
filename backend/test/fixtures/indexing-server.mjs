@@ -52,7 +52,7 @@ const inspector = new AiPdfClient({ baseUrl: settings.aiServiceUrl, token: setti
 const jobs = new DocumentJobService({ repository: new DocumentJobRepository(), notesRepository: new DocumentJobRepository(Note), storage, clock,
   profile: () => inspector.request('/internal/retrieval/profile') });
 const documents = new DocumentService({ repository: new DocumentRepository(), storage, inspector, clock });
-const server = createApp({ documentService: documents, documentJobsService: jobs }).listen(0, '127.0.0.1');
+const server = createApp({ documentService: documents, documentJobsService: jobs }).listen(Number(process.env.TEST_HTTP_PORT) || 0, '127.0.0.1');
 await once(server, 'listening');
 console.log(JSON.stringify({ port: server.address().port }));
 // Clock control is process-local stdin, never an HTTP application endpoint.
@@ -62,7 +62,7 @@ createInterface({ input: process.stdin }).on('line', line => {
 let stopping = false;
 async function stop() {
   if (stopping) { return; } stopping = true;
-  server.closeAllConnections(); server.close(); s3.closeAllConnections(); s3.close();
+  server.closeAllConnections(); server.close();
   try {
     const rows = await Document.find({}).lean();
     const results = await Promise.allSettled(rows.map(async row => {
@@ -76,6 +76,6 @@ async function stop() {
   } catch {
     console.error('Test resource cleanup failed; isolated database retained for retry.');
     process.exitCode = 1;
-  } finally { storage.client?.destroy(); localClient.destroy(); await mongoose.disconnect(); process.exit(process.exitCode || 0); }
+  } finally { s3.closeAllConnections(); s3.close(); storage.client?.destroy(); localClient.destroy(); await mongoose.disconnect(); process.exit(process.exitCode || 0); }
 }
 process.on('SIGTERM', stop); process.on('SIGINT', stop);

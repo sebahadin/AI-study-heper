@@ -42,9 +42,10 @@ def pdf(text=None, pages=1):
 
 @pytest.fixture
 def stack(tmp_path):
-    api_port, chroma_port = port(), port()
+    api_port, chroma_port, application_port = port(), port(), port()
     env = {**os.environ, 'NODE_ENV': 'test', 'TEST_DSN': 'mongodb://127.0.0.1:27017/classmate_indexing_'+secrets.token_hex(6)+'_test',
            'AI_SERVICE_TOKEN': secrets.token_urlsafe(32), 'AI_SERVICE_URL': f'http://127.0.0.1:{api_port}',
+           'TEST_HTTP_PORT': str(application_port), 'AI_CLASSMATE_URL': f'http://127.0.0.1:{application_port}',
            'AI_CHROMA_HOST': '127.0.0.1', 'AI_CHROMA_PORT': str(chroma_port), 'AI_CHROMA_SSL': 'false',
            'AI_EMBEDDING_LOCAL_FILES_ONLY': 'true', 'AI_WORKER_OUTBOX_PATH': str(tmp_path/'outbox.sqlite'),
            'AI_WORKER_POLL_SECONDS': '.1', 'AI_WORKER_MAINTENANCE_SECONDS': '.5', 'AI_WORKER_HEARTBEAT_SECONDS': '.2',
@@ -117,6 +118,16 @@ def test_automatic_upload_note_revision_restart_and_deletion(stack):
         assert wait('documents', document['_id'], 'ready')['pagesWithoutText'] == [2]
         assert wait('documents', blank['_id'], 'failed')['error']['code'] == 'pdf_text_unavailable'
         wait('notes', note['_id'], 'ready')
+        for kind, material in [('notes', note), ('documents', document)]:
+            response = browser.post('/api/study/search', json={'query': 'What supplies energy to cells?', 'scope': {kind: [material['_id']]}, 'limit': 3})
+            assert response.status_code == 200, response.status_code
+            found = response.json()
+            assert found['passages'] and found['sources']
+            assert all(p['citation']['source']['source_id'] == material['_id'] for p in found['passages'])
+            assert all(p['citation']['locator'].startswith('paragraph ' if kind == 'notes' else 'page ') for p in found['passages'])
+            assert all(src['href'] == f"/{kind}/{material['_id']}" for src in found['sources'])
+        assert browser.post('/api/study/search', json={'query': 'Energy?', 'scope': {}}).json()['passages'] == []
+        assert browser.post('/api/study/search', json={'query': 'Energy?', 'scope': {'documents': [blank['_id']]}}).json()['passages'] == []
         # Resolve canonical passages using candidates read from an independent HTTP Chroma client.
         settings = RetrievalSettings(_env_file=None, embedding_local_files_only=True)
         model = LocalHuggingFaceEmbeddings(settings)

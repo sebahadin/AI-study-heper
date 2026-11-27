@@ -1,5 +1,5 @@
 import express from 'express';
-import { timingSafeEqual } from 'node:crypto';
+import { serviceAuthentication } from '../internal-auth.mjs';
 import { DocumentError } from '../documents/errors.mjs';
 
 const uuid = value => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value);
@@ -23,21 +23,7 @@ function leaseBody(body, fail = false) {
 
 export function createDocumentJobsRouter(service, { token } = {}) {
   const router = express.Router();
-  router.use((req, res, next) => {
-    res.set('Cache-Control', 'no-store');
-    // Authenticate before parsing any body or touching sessions/databases.
-    if (!/^[A-Za-z0-9_-]{32,256}$/.test(token || '')) {
-      return res.status(503).json({ error: 'Document processing is temporarily unavailable.', code: 'indexing_unavailable' });
-    }
-    const headers = req.rawHeaders.filter((_value, index) => index % 2 === 0).filter(name => name.toLowerCase() === 'authorization');
-    const match = /^Bearer ([A-Za-z0-9_-]{32,256})$/i.exec(req.get('authorization') || '');
-    const provided = Buffer.from(match?.[1] || '');
-    const expected = Buffer.from(token);
-    if (headers.length !== 1 || provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
-      return res.set('WWW-Authenticate', 'Bearer').status(401).json({ error: 'Valid service credentials are required.', code: 'unauthorized' });
-    }
-    next();
-  });
+  router.use(serviceAuthentication(token));
   router.use((req, _res, next) => {
     if ((Number(req.get('content-length')) > 0 || req.get('transfer-encoding')) && !req.is('application/json')) {
       return next(new DocumentError(415, 'unsupported_media_type', 'Send job requests as JSON.'));

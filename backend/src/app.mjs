@@ -1,3 +1,5 @@
+import { createInternalRetrievalRouter, createStudyRouter } from './routes/retrieval.mjs';
+import { createStudySearchService } from './retrieval/service.mjs';
 import express from 'express';
 import session from 'express-session';
 import MongoStore from 'connect-mongo';
@@ -18,13 +20,15 @@ import { createDocumentsRouter } from './routes/documents.mjs';
 import { createDocumentJobsRouter } from './routes/document-jobs.mjs';
 import { createDocumentJobService } from './documents/job-service.mjs';
 
-export function createApp({ sessionStore, frontendDirectory, documentService, documentJobsService, internalServiceToken = settings.aiServiceToken } = {}) {
+export function createApp({ sessionStore, frontendDirectory, documentService, documentJobsService, studySearchService, internalServiceToken = settings.aiServiceToken } = {}) {
   const app = express();
   app.disable('x-powered-by');
   if (settings.production) {
     app.set('trust proxy', 1);
   }
   const jobs = documentJobsService || createDocumentJobService();
+  const search = studySearchService || createStudySearchService();
+  app.use('/internal/retrieval', createInternalRetrievalRouter(search, { token: internalServiceToken }));
   app.use('/internal/document-jobs', createDocumentJobsRouter(jobs, { token: internalServiceToken }));
   app.use(express.json({ limit: '1mb' }));
   app.use('/api', (req, res, next) => {
@@ -49,6 +53,7 @@ export function createApp({ sessionStore, frontendDirectory, documentService, do
   app.use(passport.initialize());
   app.use(passport.session());
   app.use('/api/auth', authRoutes);
+  app.use('/api/study', createStudyRouter(search));
   app.use('/api/dashboard', dashboardRoutes);
   app.use('/api/courses', coursesRoutes);
   app.use('/api/books', booksRoutes);

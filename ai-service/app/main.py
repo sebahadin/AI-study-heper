@@ -1,5 +1,6 @@
 """Run with uvicorn app.main:create_app --factory; no integrations start on import."""
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.documents import router as documents_router
@@ -11,11 +12,21 @@ from app.core.request_ids import RequestIdMiddleware
 from app.rag.ingestion.pdf_validation import configure_pdf_logging
 
 
+@asynccontextmanager
+async def lifecycle(app):
+    try:
+        yield
+    finally:
+        runtime = getattr(app.state, 'retrieval_runtime', None)
+        if runtime is not None:
+            await runtime.close()
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     # A missing/invalid token aborts startup; there is no insecure default.
     settings = settings if settings is not None else Settings()
     configure_pdf_logging()
-    app = FastAPI(title="Classmate AI internal API", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(lifespan=lifecycle, title="Classmate AI internal API", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.settings = settings
     app.add_middleware(RequestIdMiddleware)
     install_error_handlers(app)

@@ -1,8 +1,34 @@
 """Trusted runtime context is separate from user messages and model outputs."""
 
-from typing import Literal
+from typing import Annotated, Literal, Self
+
+from pydantic import Field, StrictBool, StringConstraints, field_validator, model_validator
 
 from app.schemas.base import Contract, Text
+
+
+SelectionId = Annotated[str, StringConstraints(strict=True, pattern=r'^[a-fA-F0-9]{24}$')]
+
+
+class StudySelection(Contract):
+    """User selections; Express checks current ownership and expands associations."""
+    library: StrictBool = False
+    documents: tuple[SelectionId, ...] = Field(default=(), max_length=20)
+    notes: tuple[SelectionId, ...] = Field(default=(), max_length=20)
+    books: tuple[SelectionId, ...] = Field(default=(), max_length=20)
+    courses: tuple[SelectionId, ...] = Field(default=(), max_length=20)
+
+    @field_validator('documents', 'notes', 'books', 'courses')
+    @classmethod
+    def unique_ids(cls, values):
+        return tuple(dict.fromkeys(value.lower() for value in values))
+
+    @model_validator(mode='after')
+    def bounded_selection(self) -> Self:
+        count = sum(len(getattr(self, name)) for name in ('documents', 'notes', 'books', 'courses'))
+        if count > 50 or self.library and count:
+            raise ValueError('Choose an explicit library or a bounded material selection.')
+        return self
 
 
 class SourceReference(Contract):
@@ -19,6 +45,7 @@ class AuthorizedScope(Contract):
     scope_id: Text
     sources: tuple[SourceReference, ...] = ()
     topics: tuple[Text, ...] = ()
+    selection: StudySelection | None = None
 
 
 class ExecutionContext(Contract):

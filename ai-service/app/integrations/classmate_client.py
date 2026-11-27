@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 from uuid import uuid4
 import asyncio
 import httpx
+from pydantic import ValidationError
 from app.core.errors import APIError
 from app.schemas.context import ExecutionContext
 from app.schemas.evidence import Passage
@@ -22,9 +23,10 @@ class ClassmateClient:
         await self.http.aclose()
         await self.downloads.aclose()
 
-    async def request(self, path: str, body: dict):
+    async def request(self, path: str, body: dict, *, retrieval: bool = False):
         try:
-            async with self.http.stream('POST', self.base + path, json=body, headers={
+            base = self.settings.classmate_url.rstrip('/') + '/internal/retrieval' if retrieval else self.base
+            async with self.http.stream('POST', base + path, json=body, headers={
                 'Authorization': 'Bearer ' + self.settings.service_token.get_secret_value(),
                 'X-Request-ID': str(uuid4()),
             }) as response:
@@ -36,10 +38,12 @@ class ClassmateClient:
                         raise APIError(503, 'classmate_unavailable', 'The application response was too large.')
                     data.extend(chunk)
                 if not response.is_success:
+                    if retrieval and response.status_code == 404:
+                        raise APIError(409, 'scope_changed', 'The selected study materials are no longer available.')
                     if response.status_code == 409:
                         raise APIError(409, 'indexing_lease_lost', 'The processing lease or configuration changed.')
                     if response.status_code in (400, 413, 415, 422):
-                        raise APIError(response.status_code, 'classmate_request_rejected', 'The application rejected the worker request.')
+                        raise APIError(response.status_code, 'classmate_request_rejected', 'The application rejected the service request.')
                     raise APIError(503, 'classmate_unavailable', 'The application service is temporarily unavailable.')
                 return json.loads(data)
         except APIError:
@@ -75,4 +79,21 @@ class ClassmateClient:
 
     async def fetch_passages(self, chunk_ids: Sequence[str], *, context: ExecutionContext) -> tuple[Passage, ...]:
         result = await self.request('/passages', {'chunk_ids': list(chunk_ids), 'context': context.model_dump(mode='json')})
-        return tuple(Passage.model_validate(item) for item in result['passages'])
+        try:
+            return tuple(Passage.model_validate(item) for item in result['passages'])
+        except (ValidationError, KeyError, TypeError):
+            raise APIError(503, 'invalid_evidence_response', 'The study passages could not be verified.') from None
+
+    async def resolve_context(self, context: ExecutionContext) -> ExecutionContext:
+        result = await self.request('/context', {'context': context.model_dump(mode='json')}, retrieval=True)
+        try:
+            return ExecutionContext.model_validate(result['context'])
+        except (ValidationError, KeyError, TypeError):
+            raise APIError(503, 'invalid_scope_response', 'The authorized study scope could not be verified.') from None
+
+    async def fetch_current_passages(self, chunk_ids: Sequence[str], *, context: ExecutionContext) -> tuple[Passage, ...]:
+        result = await self.request('/passages', {'chunk_ids': list(chunk_ids), 'context': context.model_dump(mode='json')}, retrieval=True)
+        try:
+            return tuple(Passage.model_validate(item) for item in result['passages'])
+        except (ValidationError, KeyError, TypeError):
+            raise APIError(503, 'invalid_evidence_response', 'The study passages could not be verified.') from None
