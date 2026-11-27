@@ -1,3 +1,4 @@
+import { SavedStudySets } from '../../components/SavedStudySets';
 import { CourseDiscovery, groupByCourse } from '../../components/CourseDiscovery';
 import { CourseBadges, effectiveCourses } from '../../components/CourseFields';
 import { useState } from 'react';
@@ -40,6 +41,7 @@ export function NoteList() {
   }
   return <>
     <PageHeader eyebrow="Think it through" title="Notes" description="Revisit an idea. Make a connection. Give your next thought some space." action={<Link className="btn primary" to={`/notes/add${courseQuery}`}><Icon name="edit" size={17} />Write a note</Link>} />
+    <SavedStudySets kind="summary" course={course} />
     <CourseDiscovery kind="notes" value={course} onChange={changeCourse} />
     <div className="collection-toolbar"><SearchField label="Search notes" value={query} onChange={setQuery} /><label className="filter-select"><span className="sr-only">Filter notes by book</span><select value={bookFilter} onChange={event => setBookFilter(event.target.value)}><option value="">All notes</option><option value="standalone">Standalone notes</option>{books.map(book => <option key={book._id} value={book._id}>{book.title}</option>)}</select></label><span className="collection-count">{filtered.length} {filtered.length === 1 ? 'note' : 'notes'}</span></div>
     {data.notes.length > 0 && !course && <div className="collection-layout-choice"><div role="group" aria-label="Note layout"><button aria-pressed={layout === 'courses'} onClick={() => setLayout('courses')}>By course</button><button aria-pressed={layout === 'all'} onClick={() => setLayout('all')}>All notes</button></div><span>Notes follow their own courses and their related book.</span></div>}

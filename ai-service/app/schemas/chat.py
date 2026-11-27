@@ -2,9 +2,10 @@ from typing import Literal
 from pydantic import Field, StrictBool
 from app.schemas.base import Contract, Text
 from app.schemas.context import ExecutionContext
+from app.core.constants import DEFAULT_QUESTION_COUNT
 from app.schemas.evidence import Citation
 
-ChatMode = Literal['grounded', 'general', 'mixed', 'clarification', 'insufficient_evidence']
+ChatMode = Literal['grounded', 'general', 'mixed', 'clarification', 'insufficient_evidence', 'draft']
 
 
 class NumberedCitation(Citation):
@@ -28,7 +29,10 @@ class ChatRequest(Contract):
 
 
 class ChatPlan(Contract):
-    action: Literal['search_materials', 'fetch_passages', 'answer', 'clarify', 'unsupported']
+    action: Literal['search_materials', 'fetch_passages', 'answer', 'clarify', 'unsupported', 'summarize', 'explain', 'generate_flashcards', 'generate_quiz']
     query: str = Field(max_length=160)
     chunk_ids: list[str] = Field(max_length=12)
     clarification: str = Field(max_length=300)
+
+    count: int = Field(default=DEFAULT_QUESTION_COUNT, ge=1, le=10)
+    format: Literal['auto','choice','written','code'] = 'auto'

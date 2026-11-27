@@ -184,6 +184,7 @@ const chatMessageSchema = new mongoose.Schema({
     status: { type: String, enum: ['completed', 'generating', 'cancelled', 'failed', 'interrupted'], required: true },
     mode: { type: String, default: 'pending' }, citations: { type: [chatCitationSchema], default: [] },
     model: String, usage: mongoose.Schema.Types.Mixed, errorCode: String,
+    proposalId: { type: mongoose.Schema.Types.ObjectId, default: null }, proposalKind: String,
     createdAt: { type: Date, default: Date.now },
 }, { _id: false });
 const chatRunSchema = new mongoose.Schema({
@@ -203,3 +204,25 @@ const chatQuotaSchema = new mongoose.Schema({ _id: String, count: { type: Number
 chatQuotaSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 export const Conversation = mongoose.model('Conversation', conversationSchema);
 export const ChatQuota = mongoose.model('ChatQuota', chatQuotaSchema);
+
+// One aggregate stores each generated draft and its accepted snapshot. Confirmed
+// saves/updates/deletes are atomic even on MongoDB installations without replicas.
+const studyArtifactSchema = new mongoose.Schema({
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    requestId: { type: String, required: true },
+    kind: { type: String, enum: ['summary', 'explanation', 'flashcards', 'quiz'], required: true },
+    request: { type: mongoose.Schema.Types.Mixed, required: true },
+    status: { type: String, enum: ['queued', 'generating', 'draft', 'saved', 'failed', 'cancelled', 'deleted'], default: 'queued' },
+    draft: { type: mongoose.Schema.Types.Mixed, default: null },
+    content: { type: mongoose.Schema.Types.Mixed, default: null },
+    title: { type: String, default: 'New study draft' },
+    revision: { type: Number, default: 0 }, savedRevision: { type: Number, default: 0 },
+    activeRun: { type: chatRunSchema, default: null, select: false },
+    confirmation: { type: mongoose.Schema.Types.Mixed, default: null, select: false },
+    lastAction: { type: mongoose.Schema.Types.Mixed, default: null, select: false },
+    model: String, usage: mongoose.Schema.Types.Mixed, errorCode: String,
+    conversationId: { type: mongoose.Schema.Types.ObjectId, default: null },
+}, { timestamps: true });
+studyArtifactSchema.index({ user: 1, requestId: 1 }, { unique: true });
+studyArtifactSchema.index({ user: 1, status: 1, updatedAt: -1, _id: -1 });
+export const StudyArtifact = mongoose.model('StudyArtifact', studyArtifactSchema);

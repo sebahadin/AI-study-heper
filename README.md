@@ -51,13 +51,23 @@ Background verification requeues materials if their published Chroma passages ar
 
 Open **Study chat** in the navigation or **Ask Classmate** inside a note, PDF, book, or course. Choose your study scope and ask a question. Book and course scopes include linked notes and PDFs; a book record alone does not contain readable book text. Materials need a Ready index status before chat can use them.
 
-Answers stream as provisional drafts, then their citation references are checked against current authorized passages before the final answer is saved. Click a numbered source to read the cited passage and open its original note or PDF page. Questions unsupported by the selected material receive an explicit acknowledgment. General explanations require opting in under **Study scope** and are labeled separately. Retrieved text cannot expand the assistant's permissions. This stage has read-only tools: it does not save generated decks/quizzes or change study materials.
+Answers stream as provisional drafts, then their citation references are checked against current authorized passages before the final answer is saved. Click a numbered source to read the cited passage and open its original note or PDF page. Questions unsupported by the selected material receive an explicit acknowledgment. General explanations require opting in under **Study scope** and are labeled separately. Retrieved text cannot expand the assistant's permissions. The assistant can prepare editable study drafts. Library changes require a separate user review and confirmation through Express.
 
 Conversations and messages live in MongoDB and remain across refresh, logout, and service restarts until you delete the conversation. Each conversation allows 100 turns; starting another preserves the old history. Only a bounded recent history is sent to the model. Stopped or interrupted replies keep your question and provide a retry; partial text is not saved as a completed answer. Editing/deleting a source disables its old quote preview while preserving the historical answer. Deleting a conversation permanently removes its messages.
 
 Python reads existing `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` server-side from `backend/.env` and the repository-root `.env` (root values take precedence; environment variables override both). The default provider is OpenAI with `gpt-6-luna` for routing and tutoring, reasoning disabled. `AI_CHAT_PROVIDER`, `AI_CHAT_MODEL`, and `AI_CHAT_ROUTER_MODEL` can select other available models; see `ai-service/.env.example`. Local Hugging Face embeddings continue to run on your server; the chosen chat provider receives only necessary retrieved excerpts, your question, and bounded recent conversation context. LangSmith tracing is disabled for this workflow.
 
 Default limits are 4,000 characters per question, 8,000 input tokens per model call, 1,500 output tokens for the answer, two retrieval tool calls, and a 90-second Python turn deadline. Express enforces configurable daily quotas of 50 turns per user and 200 across the app (`AI_CHAT_DAILY_TURNS` / `AI_CHAT_GLOBAL_DAILY_TURNS`); failed/cancelled turns also count. Provider retries and automatic upgrades to more expensive models are disabled. Restart the stack after changing model configuration. Keep API keys and `AI_SERVICE_TOKEN` out of React configuration.
+
+## AI study tools
+
+Open **Study tools** or **Create study material** inside a note, PDF, book, or course. Create a summary, explanation, recall deck, or practice quiz from ready indexed materials. Chat can also prepare these drafts; use its study buttons or ask directly. A generated result is an editable draft, with source previews and an explicit description of its excerpt coverage.
+
+Review the content, edit its wording/answers/rubrics, and select **Review & save**. The confirmation applies only to the exact revision you reviewed. Saved-set edits remain draft changes until separately confirmed; deletion also requires confirmation. Repeated confirmation requests cannot create duplicate saved sets. **Create another draft** reuses the original scope and generation settings so you can adjust or regenerate after source changes. Drafts and saved sets persist in MongoDB until you delete them; source-version changes prevent stale drafts from being newly saved.
+
+Saved recall decks appear in **Flashcards**, saved quizzes in **Quiz**, and summaries in **Notes**, alongside the existing manually created materials. Decks use the existing accessible 3D flip. Quizzes support mixed multiple-choice, written, and coding questions. Choice answers receive deterministic feedback; written/code answers show reference answers, explanations, and self-review rubrics. The code editor supports syntax highlighting and normal Tab navigation. Code is never executed. Session answers remain in browser memory; durable attempts and AI assessment belong to the learning-feedback stage.
+
+The default is five questions/cards, controlled by `DEFAULT_QUESTION_COUNT` in `ai-service/app/core/constants.py`; the form reads this policy from Python. Requests can choose 1–10 items and automatic, choice, written, or code quiz formats. Automatic mode chooses formats appropriate to the material. Generation uses the configured chat model unless `AI_STUDY_MODEL` is set, with a default 6,000-token output cap (`AI_STUDY_MAX_OUTPUT_TOKENS`), a 90-second deadline, and the shared daily AI quotas. Existing server-side provider keys are reused. The editor and its language support load only when needed.
 
 ## Production build
 
@@ -81,7 +91,7 @@ Express serves `frontend/dist` and supports direct navigation and refresh on Rea
 - Discuss indexed notes and PDFs in Study chat. Select individual materials, books, courses, or your library; add a topic focus; read streamed answers with verified source previews; stop a response; and reopen saved conversations.
 - Confirm deletions. Deleting a book unlinks its notes and removes its flashcard tags while preserving both. Cards with no remaining books stay available for editing or removal.
 
-Quiz scores stay in browser memory and are not persisted. The existing favorite flag is preserved in MongoDB, without adding a new favorite control. Study chat is available; saved AI generation tools and personalized coaching are later stages.
+Quiz scores stay in browser memory and are not persisted. The existing favorite flag is preserved in MongoDB, without adding a new favorite control. Study chat and AI study tools are available. Persistent attempt history, AI assessment of open answers, and personalized coaching are later stages.
 
 ## API
 
@@ -106,6 +116,12 @@ Endpoints return JSON, except chat answer streams (server-sent events), PDF file
 | `/api/chat/:id/cancel` | POST | Stop the current run using its runId |
 | `/api/chat/:id/sources/:messageId/:number` | GET | Revalidate and preview a cited passage |
 | `/api/chat/config` and `/api/chat/options` | GET | Chat availability and owned scope choices |
+| `/api/study-tools` | GET, POST | Paginated owned drafts/sets or create a generation request |
+| `/api/study-tools/:id` | GET, PATCH | Read a study set or edit its private draft with revision checks |
+| `/api/study-tools/:id/generate` and `/cancel` | POST | Stream generation status or stop it |
+| `/api/study-tools/:id/confirmations` and `/actions` | POST | Review the exact save/update/delete and apply its confirmation |
+| `/api/study-tools/:id/practice` and `/sources/:number` | GET | Answer-key-free quiz controls or a verified source excerpt |
+| `/api/study-tools/:id/feedback` | POST | Choice feedback or written/code self-review reference and rubric |
 
 Materials accept an optional `courses` array of owned course IDs; an omitted array preserves membership on PATCH. Filter books, notes, or flashcards with `?course=courseId`, or `?course=none` for materials with no direct or inherited course. Course material assignments accept `{ "kind": "books" | "notes" | "flashcards", "ids": [...] }`; all IDs must belong to the signed-in user. This changes only the selected course’s direct assignments.
 
@@ -115,7 +131,7 @@ Note writes accept `title`, optional `book` (an owned book ID or `null`), and ei
 
 Study search accepts `{ "query": "What supplies energy to cells?", "scope": { "courses": ["courseId"] }, "limit": 6 }`. A scope can select `documents`, `notes`, `books`, and `courses`; their selections are combined. Book/course scopes include their currently linked notes and PDFs. Use `{ "library": true }` explicitly for the whole library. An empty scope returns no passages. Only your current, ready source versions are searched; select a narrower scope if more than 100 indexed sources match.
 
-Search returns `{ "query", "passages", "sources" }`, including PDF page or note paragraph citations and links to the original material. Results contain at most 12 passages and 12,000 characters. Study chat uses these same retrieval boundaries for its answers. The internal read tools are `search_materials` and `fetch_passages`; the application supplies their identity and scope.
+Search returns `{ "query", "passages", "sources" }`, including PDF page or note paragraph citations and links to the original material. Results contain at most 12 passages and 12,000 characters. Study chat uses these same retrieval boundaries for its answers. The internal read tools are `search_materials`, `fetch_passages`, and the bounded `read_material_overview`; the application supplies their identity and scope.
 
 Errors have `{ "error": "message", "fields": { "field": "message" } }`; `fields` is optional. Protected endpoints return HTTP 401; missing or inaccessible records return 404; invalid input returns 400; duplicate registration returns 409. Every record operation and book association is scoped to the authenticated user. Cross-site writes are rejected.
 
@@ -140,4 +156,11 @@ Those integration tests create users and study records, then drop that test data
 ```sh
 cd ai-service
 RUN_CHAT_LIVE_TEST=1 uv run --locked pytest tests/integration/test_chat_live.py
+```
+
+The study-tool integration test is also opt-in and uses only synthetic notes/PDFs and disposable services:
+
+```sh
+cd ai-service
+RUN_STUDY_LIVE_TEST=1 uv run --locked pytest tests/integration/test_study_tools_live.py
 ```

@@ -1,0 +1,19 @@
+import { useEffect,useRef,useState } from 'react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Link } from 'react-router-dom';
+import { api,errorMessage } from '../../services/api';
+import { Icon } from '../../components/Icon';
+import { kindLabels,type StudyArtifact,type StudyDraft } from '../../services/studyTools';
+import type { ChatCitation } from '../../services/chat';
+export function StudyMarkdown({text}:{text:string}){return <div className="study-markdown"><Markdown remarkPlugins={[remarkGfm]} skipHtml components={{img:()=>null,a:({children})=><span>{children}</span>}}>{text}</Markdown></div>;}
+export function CoverageNote({draft}:{draft:StudyDraft}){return <p className="study-coverage"><Icon name="file" size={16}/><span>Based on {draft.coverage.passages} excerpts from {draft.coverage.coveredSources} of {draft.coverage.totalSources} indexed materials. This is a selection of passages; details may be omitted. Check the sources.</span></p>;}
+export function StudySources({id,citations}:{id:string;citations:ChatCitation[]}){
+ const [source,setSource]=useState<ChatCitation|null>(null);return <><div className="study-source-chips" aria-label="Study sources">{citations.map(c=><button type="button" key={c.number} onClick={()=>setSource(c)}><b>{c.number}</b><span>{c.title}<small>{c.locator}</small></span><Icon name="file" size={15}/></button>)}</div>{source&&<StudySourceDialog id={id} citation={source} onClose={()=>setSource(null)}/>}</>;
+}
+function StudySourceDialog({id,citation,onClose}:{id:string;citation:ChatCitation;onClose:()=>void}){
+ const ref=useRef<HTMLDialogElement>(null),[result,setResult]=useState<{passage:{text:string};href:string}|null>(null),[error,setError]=useState('');
+ useEffect(()=>{ref.current?.showModal();let live=true;void api<{passage:{text:string};href:string}>(`/study-tools/${id}/sources/${citation.number}`).then(v=>{if(live)setResult(v);}).catch(e=>{if(live)setError(errorMessage(e));});return()=>{live=false;};},[id,citation.number]);
+ return <dialog ref={ref} className="study-modal" aria-label={`Source ${citation.number}`} onCancel={onClose}><header><div><span className="eyebrow">Source {citation.number} · {citation.locator}</span><h2>{citation.title}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close source"><Icon name="close"/></button></header>{error?<p role="alert">{error}</p>:result?<blockquote>{result.passage.text}</blockquote>:<p role="status">Checking this source…</p>}<footer>{result&&<a className="btn primary" target="_blank" rel="noopener noreferrer" href={citation.source.source_type==='document'?`/api/documents/${citation.source.source_id}/file#page=${citation.page_start||1}`:result.href}>Open original</a>}<button className="btn secondary" onClick={onClose}>Close</button></footer></dialog>;
+}
+export function StudySetCard({item}:{item:StudyArtifact}){return <article className={`study-set-card study-set-card--${item.kind}`}><div className="study-set-object" aria-hidden="true"><i/><span><Icon name={item.kind==='flashcards'?'cards':item.kind==='quiz'?'play':'note'} size={32}/></span></div><div><span className="eyebrow">{kindLabels[item.kind]} · {item.status==='saved'?'Saved':item.status==='generating'?'Preparing':'Draft'}</span><h3><Link to={`/study-tools/${item._id}`}>{item.title}</Link></h3><p>{item.count?`${item.count} ${item.kind==='quiz'?'questions':'cards'} · `:''}{new Date(item.updatedAt).toLocaleDateString()}</p><Link className="text-link" to={`/study-tools/${item._id}`}>{item.status==='saved'?'Open study set':'Review draft'} <span aria-hidden="true">↗</span></Link></div></article>;}

@@ -20,7 +20,7 @@ class EvidenceRetriever:
         current = await self.classmate.resolve_context(context)
         if (current.user_id != context.user_id or current.run_id != context.run_id
                 or current.scope.scope_id != context.scope.scope_id or current.scope.selection != context.scope.selection
-                or current.conversation_id != context.conversation_id
+                or current.conversation_id != context.conversation_id or current.proposal_id != context.proposal_id
                 or current.scope.selection is None and any(ref not in context.scope.sources for ref in current.scope.sources)):
             raise APIError(503, 'invalid_scope_response', 'The authorized study scope could not be verified.')
         return current
@@ -69,6 +69,13 @@ class EvidenceRetriever:
             if error.code == 'scope_changed':
                 return EvidenceBundle(query=arguments.query)
             raise
+
+    async def overview(self, *, context):
+        current=await self._current_context(context)
+        if not current.scope.sources:return ()
+        rows=await self.classmate.fetch_overview(context=current)
+        rows=tuple(p for p in rows if p.citation.source in current.scope.sources)
+        return await self._canonical([p.citation.chunk_id for p in rows],context=current,candidates=tuple(p.citation for p in rows)) if rows else ()
 
     async def fetch(self, chunk_ids, *, context: ExecutionContext) -> tuple[Passage, ...]:
         arguments = FetchPassagesArguments(chunk_ids=tuple(chunk_ids))

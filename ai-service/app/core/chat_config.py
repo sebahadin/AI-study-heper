@@ -11,6 +11,8 @@ class ChatSettings(BaseSettings):
     chat_provider: Literal['openai', 'anthropic'] = 'openai'
     chat_model: str | None = None
     chat_router_model: str | None = None
+    study_model_name: str | None = Field(default=None, validation_alias='AI_STUDY_MODEL')
+    study_max_output_tokens: int = Field(default=6000, ge=1000, le=8000)
     chat_reasoning_effort: Literal['none', 'low', 'medium'] = 'none'
     chat_max_output_tokens: int = Field(default=1500, ge=128, le=3000)
     chat_max_input_tokens: int = Field(default=8000, ge=2000, le=12000)
@@ -20,6 +22,10 @@ class ChatSettings(BaseSettings):
     @property
     def model(self):
         return self.chat_model or ('gpt-6-luna' if self.chat_provider == 'openai' else 'claude-haiku-4-5-20251001')
+
+    @property
+    def study_model(self):
+        return self.study_model_name or self.model
 
     @property
     def router_model(self):

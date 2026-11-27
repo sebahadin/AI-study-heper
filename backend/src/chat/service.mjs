@@ -11,7 +11,7 @@ const unavailable = () => new ChatError(503, 'chat_unavailable', chatFailures.ch
 const missing = () => new ChatError(404, 'conversation_not_found', 'Conversation not found.');
 const modes = new Set(['grounded', 'general', 'mixed', 'clarification', 'insufficient_evidence']);
 export const publicMessage = entry => ({ id: entry.id, requestId: entry.requestId, sequence: entry.sequence, role: entry.role, content: entry.content,
-  status: entry.status, mode: entry.mode, citations: entry.citations || [], createdAt: entry.createdAt, model: entry.model,
+  status: entry.status, mode: entry.mode, citations: entry.citations || [], createdAt: entry.createdAt, model: entry.model, proposalId: entry.proposalId ? String(entry.proposalId) : null, proposalKind: entry.proposalKind,
   error: entry.errorCode ? chatFailures[entry.errorCode] || chatFailures.chat_unavailable : null });
 export const publicConversation = convo => ({ _id: String(convo._id), title: convo.title, selection: convo.selection, topic: convo.topic,
   allowGeneral: convo.allowGeneral, updatedAt: convo.updatedAt, messageCount: convo.messageCount, busy: !!convo.activeRun, activeRunId: convo.activeRun?.id || null,
@@ -162,7 +162,11 @@ export class ChatService {
         } else if (event.type === 'mode' && modes.has(event.mode)) { yield { type: 'mode', mode: event.mode }; }
         else if (event.type === 'error') { throw new ChatError(503, Object.hasOwn(chatFailures, event.code) ? event.code : 'chat_unavailable', chatFailures.chat_unavailable); }
         else if (event.type === 'final') {
-          const verified = await this.final(user, conversation, context, event);
+          let verified;
+          if (event.draft && event.mode === 'draft' && this.studyTools) {
+            const proposal = await this.studyTools.fromChat(user, conversation, run, event.draft);
+            verified = { content: `Your ${proposal.kind === 'flashcards' ? 'flashcard deck' : proposal.kind} draft is ready to review. Nothing has been saved to your library.`, mode: 'draft', citations: [], proposalId: proposal._id, proposalKind: proposal.kind };
+          } else { verified = await this.final(user, conversation, context, event); }
           const record = await this.repository.finish(user, id, run, { ...verified, status: 'completed', model: typeof event.model === 'string' ? event.model.slice(0, 100) : '',
             usage: event.usage && { inputTokens: Number(event.usage.input_tokens) || 0, outputTokens: Number(event.usage.output_tokens) || 0 } });
           if (!record) { throw new ChatError(409, 'source_changed', chatFailures.source_changed); }

@@ -1,3 +1,4 @@
+import { SavedStudySets } from '../../components/SavedStudySets';
 import { CourseFilter, courseIds } from '../../components/CourseFields';
 import { useReducer, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -34,6 +35,7 @@ export function QuizPage() {
   if (books.error || !books.data) { return <LoadError message={books.error || 'Could not load books.'} retry={books.reload} />; }
   const card = state.cards[state.index];
   return <section className="section quiz-section"><PageHeader eyebrow="A moment to focus" title="Take a quiz" description="Choose a course or books. Trust what you know. Learn something new." />
+    {state.status === 'idle' && <SavedStudySets kind="quiz" course={course} />}
     <ErrorBanner message={error} />
     {state.status === 'idle' && <div className="controls"><div className="quiz-course-selector"><h3>Study by course</h3><p>Choose a course, or pick individual books below.</p><CourseFilter allLabel="Choose a course" value={course} onChange={value => { setCourse(value); setTags([]); }} /></div><BookTags label={course ? 'Narrow by books (optional)' : 'Filter by books'} emptyMessage={course ? 'No related books. This quiz can use the course’s flashcards.' : 'Add a book to start tagging flashcards.'} books={books.data.books.filter(book => !course || (course === 'none' ? !courseIds(book.courses).length : courseIds(book.courses).includes(course)))} selected={tags} onChange={setTags} disabled={busy} />{!books.data.books.length && <Link to="/books/add">Add your first book</Link>}<button type="button" className="btn primary" disabled={busy || !books.data.books.length && !course} onClick={start}>{busy ? 'Loading questions…' : 'Start quiz'}</button></div>}
     {state.status === 'active' && <>

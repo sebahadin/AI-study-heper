@@ -12,6 +12,7 @@ export function createInternalRetrievalRouter(service, { token }) {
   });
   router.use(express.json({ limit: '128kb' }));
   router.post('/context', async (req, res) => res.json({ context: await service.resolver.refresh(req.body?.context) }));
+  router.post('/overview', async (req, res) => res.json(await service.passages.overview(req.body)));
   router.post('/passages', async (req, res) => res.json(await service.passages.fetch(req.body)));
   router.use((_req, res) => res.status(404).json({ error: 'Internal endpoint not found.', code: 'not_found' }));
   router.use(retrievalErrorHandler);

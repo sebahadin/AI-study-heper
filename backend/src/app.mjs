@@ -1,3 +1,7 @@
+import { createStudyToolsRouter } from './routes/study-tools.mjs';
+import { StudyService } from './study-tools/service.mjs';
+import { StudyRepository } from './study-tools/repository.mjs';
+import { AiStudyClient } from './integrations/ai-study.mjs';
 import { createChatRouter } from './routes/chat.mjs';
 import { createChatService } from './chat/service.mjs';
 import { createInternalRetrievalRouter, createStudyRouter } from './routes/retrieval.mjs';
@@ -22,7 +26,7 @@ import { createDocumentsRouter } from './routes/documents.mjs';
 import { createDocumentJobsRouter } from './routes/document-jobs.mjs';
 import { createDocumentJobService } from './documents/job-service.mjs';
 
-export function createApp({ sessionStore, frontendDirectory, documentService, documentJobsService, studySearchService, chatService, internalServiceToken = settings.aiServiceToken } = {}) {
+export function createApp({ sessionStore, frontendDirectory, documentService, documentJobsService, studySearchService, chatService, studyToolsService, internalServiceToken = settings.aiServiceToken } = {}) {
   const app = express();
   app.disable('x-powered-by');
   if (settings.production) {
@@ -55,7 +59,11 @@ export function createApp({ sessionStore, frontendDirectory, documentService, do
   app.use(passport.initialize());
   app.use(passport.session());
   app.use('/api/auth', authRoutes);
-  app.use('/api/chat', createChatRouter(chatService || createChatService(search)));
+  const chat = chatService || createChatService(search);
+  const studyTools = studyToolsService || new StudyService({ repository: new StudyRepository(), search, chat, client: new AiStudyClient({ baseUrl: settings.aiServiceUrl, token: settings.aiServiceToken }) });
+  chat.studyTools = studyTools;
+  app.use('/api/chat', createChatRouter(chat));
+  app.use('/api/study-tools', createStudyToolsRouter(studyTools));
   app.use('/api/study', createStudyRouter(search));
   app.use('/api/dashboard', dashboardRoutes);
   app.use('/api/courses', coursesRoutes);

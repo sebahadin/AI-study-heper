@@ -14,6 +14,7 @@ export const chatFailures = Object.freeze({
   interrupted: 'This response was interrupted. Your conversation is saved; you can try again.',
   source_changed: 'Your materials changed while this answer was being prepared. Ask again to use the latest version.',
   daily_limit: 'The daily chat limit has been reached. Please try again tomorrow.',
+  draft_invalid: 'The generated draft could not be validated. Try a narrower task.',
   response_invalid: 'The response could not be verified. Please try again.',
 });
 export class ChatError extends Error {

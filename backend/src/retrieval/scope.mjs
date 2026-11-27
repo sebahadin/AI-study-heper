@@ -1,4 +1,4 @@
-import { Book, Course, Document, Note, Conversation } from '../db.mjs';
+import { Book, Course, Document, Note, Conversation, StudyArtifact } from '../db.mjs';
 import { RetrievalError, unavailable } from './errors.mjs';
 
 export const MAX_SCOPE_SOURCES = 100;
@@ -86,13 +86,23 @@ export class StudyScopeResolver {
   }
 
   async refresh(context) {
-    if (!plainObject(context) || Object.keys(context).some(key => !['user_id', 'run_id', 'conversation_id', 'scope'].includes(key))
+    if (!plainObject(context) || Object.keys(context).some(key => !['user_id', 'run_id', 'conversation_id', 'proposal_id', 'scope'].includes(key))
         || !objectId(context.user_id) || typeof context.run_id !== 'string' || !context.run_id || context.run_id.length > 128
         || !plainObject(context.scope) || Object.keys(context.scope).some(key => !['scope_id', 'sources', 'selection', 'topics'].includes(key))
         || typeof context.scope.scope_id !== 'string' || !context.scope.scope_id || context.scope.scope_id.length > 128
         || !Array.isArray(context.scope.sources) || context.scope.sources.length > MAX_SCOPE_SOURCES
         || context.scope.sources.some(ref => !plainObject(ref) || !objectId(ref.source_id) || !['note', 'document'].includes(ref.source_type)
           || !['source_version', 'index_generation'].every(key => typeof ref[key] === 'string' && ref[key].length > 0 && ref[key].length <= 200))) { throw invalid(); }
+    if (context.conversation_id && context.proposal_id) { throw invalid(); }
+    if (context.proposal_id) {
+      if (!objectId(context.proposal_id)) { throw invalid(); }
+      const proposal = await StudyArtifact.findOne({ _id: context.proposal_id, user: context.user_id, status: 'generating',
+        'activeRun.id': context.run_id, 'activeRun.leaseUntil': { $gt: new Date() },
+      }).select('request.selection').lean();
+      if (!proposal || JSON.stringify(parseSelection(context.scope.selection)) !== JSON.stringify(parseSelection(proposal.request.selection))) {
+        throw new RetrievalError(404, 'scope_changed', 'This study request is no longer active.');
+      }
+    }
     if (context.conversation_id) {
       if (!objectId(context.conversation_id)) { throw invalid(); }
       const conversation = await Conversation.findOne({ _id: context.conversation_id, user: context.user_id,

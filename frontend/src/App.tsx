@@ -12,6 +12,9 @@ import { FlashcardEditor, FlashcardList } from './pages/flashcards/FlashcardPage
 import { CourseList, CourseEditor, CourseDetail } from './pages/courses/CoursePages';
 import { QuizPage } from './pages/flashcards/QuizPage';
 
+const StudyTools = lazy(() => import('./pages/study-tools/StudyToolsPage'));
+const StudyDetail = lazy(() => import('./pages/study-tools/StudyDetail'));
+const StudyPractice = lazy(() => import('./pages/study-tools/StudyPractice'));
 const StudyChat = lazy(() => import('./pages/chat/ChatPage'));
 const NoteDetail = lazy(() => import('./pages/notes/NotePages').then((module) => ({ default: module.NoteDetail })));
 const NoteEditor = lazy(() => import('./pages/notes/NotePages').then((module) => ({ default: module.NoteEditor })));
@@ -34,6 +37,10 @@ export default function App() {
     <Route path="login" element={<AuthPage key="login" />} />
     <Route path="register" element={<AuthPage key="register" register />} />
     <Route element={<ProtectedRoute />}>
+      <Route path="study-tools" element={<StudyTools />} />
+      <Route path="study-tools/new" element={<StudyTools create />} />
+      <Route path="study-tools/:id" element={<StudyDetail />} />
+      <Route path="study-tools/:id/practice" element={<StudyPractice />} />
       <Route path="chat" element={<StudyChat />} />
       <Route path="chat/:id" element={<StudyChat />} />
       <Route path="dashboard" element={<Dashboard />} />

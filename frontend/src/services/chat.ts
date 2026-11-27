@@ -1,9 +1,9 @@
 import { ApiError } from './api';
-export type ChatMode = 'pending' | 'grounded' | 'general' | 'mixed' | 'clarification' | 'insufficient_evidence';
+export type ChatMode = 'pending' | 'grounded' | 'general' | 'mixed' | 'clarification' | 'insufficient_evidence' | 'draft';
 export interface ChatSelection { library: boolean; documents: string[]; notes: string[]; books: string[]; courses: string[] }
 export const emptySelection = (): ChatSelection => ({ library: false, documents: [], notes: [], books: [], courses: [] });
 export interface ChatCitation { number: number; chunk_id: string; source: { source_id: string; source_type: 'note' | 'document'; source_version: string; index_generation: string }; locator: string; page_start?: number | null; page_end?: number | null; title: string; href: string }
-export interface ChatMessage { id: string; requestId: string; sequence: number; role: 'user' | 'assistant'; content: string; status: 'completed' | 'generating' | 'cancelled' | 'failed' | 'interrupted'; mode: ChatMode; citations: ChatCitation[]; createdAt: string; error?: string | null; model?: string }
+export interface ChatMessage { id: string; requestId: string; sequence: number; role: 'user' | 'assistant'; content: string; status: 'completed' | 'generating' | 'cancelled' | 'failed' | 'interrupted'; mode: ChatMode; citations: ChatCitation[]; createdAt: string; error?: string | null; model?: string; proposalId?: string | null; proposalKind?: string }
 export interface Conversation { _id: string; title: string; selection: ChatSelection; topic: string; allowGeneral: boolean; updatedAt: string; messageCount: number; messages: ChatMessage[]; busy: boolean; activeRunId?: string | null; limitReached: boolean }
 export interface ChatOptions { courses: { _id: string; title: string; code?: string }[]; books: { _id: string; title: string; author?: string }[]; notes: { _id: string; title: string }[]; documents: { _id: string; title: string; filename?: string }[] }
 export interface ChatStreamEvent { type: 'start' | 'status' | 'mode' | 'delta' | 'done' | 'error'; runId?: string; requestId?: string; question?: ChatMessage; answer?: ChatMessage; message?: ChatMessage | string; phase?: string; mode?: ChatMode; text?: string; title?: string; code?: string }

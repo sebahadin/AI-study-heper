@@ -97,3 +97,11 @@ class ClassmateClient:
             return tuple(Passage.model_validate(item) for item in result['passages'])
         except (ValidationError, KeyError, TypeError):
             raise APIError(503, 'invalid_evidence_response', 'The study passages could not be verified.') from None
+
+
+    async def fetch_overview(self, *, context: ExecutionContext) -> tuple[Passage,...]:
+        result=await self.request('/overview',{'context':context.model_dump(mode='json')},retrieval=True)
+        try:
+            return tuple(Passage.model_validate(p) for p in result['passages'])
+        except (ValidationError,KeyError,TypeError):
+            raise APIError(503,'invalid_evidence_response','The source overview could not be verified.') from None

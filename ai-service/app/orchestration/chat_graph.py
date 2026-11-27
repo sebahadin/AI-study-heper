@@ -40,6 +40,7 @@ def build_chat_graph(*, request, models, retriever):
         return {'plan': plan}
 
     def next_node(state):
+        if state['plan'].action in ('summarize','explain','generate_flashcards','generate_quiz'): return 'study_tool'
         if state['plan'].action in ('search_materials', 'fetch_passages') and state['steps'] < 2: return 'read_tools'
         return 'tutor'
 
@@ -63,13 +64,30 @@ def build_chat_graph(*, request, models, retriever):
                 evidence.append(passage); characters += len(passage.text)
         return {'evidence':tuple(evidence), 'steps':state['steps']+1}
 
+    async def study_tool(state):
+        from app.schemas.study import StudyRequest
+        from app.orchestration.study_graph import stream_study
+        plan=state['plan'];kind={'summarize':'summary','explain':'explanation','generate_flashcards':'flashcards','generate_quiz':'quiz'}[plan.action]
+        writer=get_stream_writer()
+        study=StudyRequest(kind=kind,instruction=request.message,topic=request.topic,count=plan.count,format=plan.format,context=request.context)
+        try:
+            async with aclosing(stream_study(request=study,models=models,retriever=retriever)) as stream:
+                async for event in stream:
+                    if event['type']=='status':writer({'type':'status','phase':'searching' if event['phase']=='searching' else 'checking' if event['phase']=='checking' else 'writing'})
+                    elif event['type']=='final':
+                        writer({'type':'final','answer':'Your study draft is ready to review. Nothing has been saved to your library.', 'mode':'draft','citations':[], 'draft':event['draft'],'model':event['model'],'usage':{key:state['stats'].get(key,0)+event['usage'].get(key,0) for key in ('input_tokens','output_tokens')}})
+        except APIError as error:
+            if error.code!='insufficient_evidence':raise
+            writer({'type':'final','answer':'The selected excerpts do not support that draft. Choose other indexed materials or narrow the task.','mode':'insufficient_evidence','citations':[],'model':models.settings.model,'usage':state['stats']})
+        return {}
+
     async def tutor(state):
         writer = get_stream_writer(); plan = state['plan']
         if plan.action == 'clarify':
             answer = plan.clarification or 'Which concept or study material would you like me to explain?'
             mode = 'clarification'; writer({'type':'mode','mode':mode}); writer({'type':'delta','text':answer})
         elif plan.action == 'unsupported':
-            answer = 'I can discuss and explain your materials here. Saving, editing, or generating library items is not available in study chat yet.'
+            answer = 'I can discuss and explain your materials here. Direct library changes are not available in chat. I can prepare study drafts; open a draft to review and confirm a save, update or deletion.'
             mode = 'clarification'; writer({'type':'mode','mode':mode}); writer({'type':'delta','text':answer})
         else:
             writer({'type':'status','phase':'writing'})
@@ -93,9 +111,9 @@ def build_chat_graph(*, request, models, retriever):
         return {}
 
     graph = StateGraph(ChatState)
-    graph.add_node('supervisor', supervisor); graph.add_node('read_tools', read_tools); graph.add_node('tutor', tutor); graph.add_node('verify', verify)
+    graph.add_node('study_tool',study_tool); graph.add_node('supervisor', supervisor); graph.add_node('read_tools', read_tools); graph.add_node('tutor', tutor); graph.add_node('verify', verify)
     graph.add_edge(START, 'supervisor'); graph.add_conditional_edges('supervisor', next_node)
-    graph.add_edge('read_tools','supervisor'); graph.add_edge('tutor','verify'); graph.add_edge('verify',END)
+    graph.add_edge('study_tool',END); graph.add_edge('read_tools','supervisor'); graph.add_edge('tutor','verify'); graph.add_edge('verify',END)
     return graph.compile()
 
 

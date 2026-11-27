@@ -1,8 +1,8 @@
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import type { Flashcard } from '../types';
 import { Icon } from './Icon';
 
-export function FlashcardFlip({ card, headingLevel = 3 }: { card: Pick<Flashcard, 'question' | 'options' | 'correctIndex'>; headingLevel?: 3 | 4 }) {
+export function FlashcardFlip({ card, headingLevel = 3, frontContent, backContent }: { card: Pick<Flashcard, 'question' | 'options' | 'correctIndex'>; headingLevel?: 3 | 4; frontContent?: ReactNode; backContent?: ReactNode }) {
   const [flipped, setFlipped] = useState(false);
   const id = useId();
   const answerId = `${id}-answer`;
@@ -14,12 +14,12 @@ export function FlashcardFlip({ card, headingLevel = 3 }: { card: Pick<Flashcard
     <div className="flashcard-flip-rotator">
       <div className="flashcard-flip-face flashcard-flip-front" aria-hidden={flipped} inert={flipped}>
         <div className="flashcard-flip-face-heading"><span>Question</span><Icon name="cards" size={18} /></div>
-        <Heading className="flashcard-flip-question">{card.question}</Heading>
+        {frontContent ? <div className="flashcard-flip-question" role="heading" aria-level={headingLevel}>{frontContent}</div> : <Heading className="flashcard-flip-question">{card.question}</Heading>}
         <span className="flashcard-flip-hint" aria-hidden="true"><Icon name="flip" size={17} />Flip for answer</span>
       </div>
       <div className="flashcard-flip-face flashcard-flip-back" id={answerId} role="region" aria-label="Correct answer" aria-hidden={!flipped} inert={!flipped}>
         <div className="flashcard-flip-face-heading"><span>Correct answer</span><Icon name="check" size={19} /></div>
-        <p className="flashcard-flip-answer" id={answerTextId}>{answer}</p>
+        {backContent ? <div className="flashcard-flip-answer" id={answerTextId}>{backContent}</div> : <p className="flashcard-flip-answer" id={answerTextId}>{answer}</p>}
         <span className="flashcard-flip-hint" aria-hidden="true"><Icon name="flip" size={17} />Flip to question</span>
       </div>
     </div>

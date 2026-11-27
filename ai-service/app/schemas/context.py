@@ -59,3 +59,4 @@ class ExecutionContext(Contract):
     run_id: Text
     scope: AuthorizedScope
     conversation_id: Text | None = None
+    proposal_id: Text | None = None
