@@ -1,3 +1,7 @@
+import { LearningRepository } from './learning/repository.mjs';
+import { LearningService } from './learning/service.mjs';
+import { AiLearningClient } from './integrations/ai-learning.mjs';
+import { createLearningRouter, createInternalLearningRouter } from './routes/learning.mjs';
 import { createStudyToolsRouter } from './routes/study-tools.mjs';
 import { StudyService } from './study-tools/service.mjs';
 import { StudyRepository } from './study-tools/repository.mjs';
@@ -26,7 +30,7 @@ import { createDocumentsRouter } from './routes/documents.mjs';
 import { createDocumentJobsRouter } from './routes/document-jobs.mjs';
 import { createDocumentJobService } from './documents/job-service.mjs';
 
-export function createApp({ sessionStore, frontendDirectory, documentService, documentJobsService, studySearchService, chatService, studyToolsService, internalServiceToken = settings.aiServiceToken } = {}) {
+export function createApp({ sessionStore, frontendDirectory, documentService, documentJobsService, studySearchService, chatService, studyToolsService, learningService, internalServiceToken = settings.aiServiceToken } = {}) {
   const app = express();
   app.disable('x-powered-by');
   if (settings.production) {
@@ -34,6 +38,12 @@ export function createApp({ sessionStore, frontendDirectory, documentService, do
   }
   const jobs = documentJobsService || createDocumentJobService();
   const search = studySearchService || createStudySearchService();
+  const chat = chatService || createChatService(search);
+  const studyTools = studyToolsService || new StudyService({ repository: new StudyRepository(), search, chat, client: new AiStudyClient({ baseUrl: settings.aiServiceUrl, token: settings.aiServiceToken }) });
+  chat.studyTools = studyTools;
+  const learning = learningService || new LearningService({ repository: new LearningRepository(), chat, client: new AiLearningClient({ baseUrl: settings.aiServiceUrl, token: settings.aiServiceToken }) });
+  chat.learning = learning;
+  app.use('/internal/learning', createInternalLearningRouter(learning, { token: internalServiceToken }));
   app.use('/internal/retrieval', createInternalRetrievalRouter(search, { token: internalServiceToken }));
   app.use('/internal/document-jobs', createDocumentJobsRouter(jobs, { token: internalServiceToken }));
   app.use(express.json({ limit: '1mb' }));
@@ -59,9 +69,7 @@ export function createApp({ sessionStore, frontendDirectory, documentService, do
   app.use(passport.initialize());
   app.use(passport.session());
   app.use('/api/auth', authRoutes);
-  const chat = chatService || createChatService(search);
-  const studyTools = studyToolsService || new StudyService({ repository: new StudyRepository(), search, chat, client: new AiStudyClient({ baseUrl: settings.aiServiceUrl, token: settings.aiServiceToken }) });
-  chat.studyTools = studyTools;
+  app.use('/api/learning', createLearningRouter(learning));
   app.use('/api/chat', createChatRouter(chat));
   app.use('/api/study-tools', createStudyToolsRouter(studyTools));
   app.use('/api/study', createStudyRouter(search));

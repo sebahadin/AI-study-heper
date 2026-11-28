@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { StudyArtifact } from '../db.mjs';
-import { CHAT_RUN_LEASE_MS } from '../chat/policy.mjs';
+import { CHAT_RUN_LEASE_MS, ChatError } from '../chat/policy.mjs';
 export class StudyRepository {
   constructor({ clock = () => new Date() } = {}) { this.clock = clock; }
   async get(user, id, deleted = false) {
@@ -11,10 +11,15 @@ export class StudyRepository {
     try { return await StudyArtifact.create({ user, requestId, kind: request.kind, request, conversationId }); }
     catch (error) { if (error.code !== 11000) { throw error; } return StudyArtifact.findOne({ user, requestId }).lean(); }
   }
-  async list(user, { status, kind, cursor }, association) {
-    const filter = { user, status: status === 'saved' ? 'saved' : status === 'drafts' ? { $in: ['queued', 'generating', 'draft', 'failed', 'cancelled'] } : { $ne: 'deleted' } };
+  async list(user, { status, kind, cursor, q }, association) {
+    const filter = { user, status: status === 'saved' ? 'saved' : { $ne: 'deleted' } };
+    if (status === 'drafts') { filter.$and = [{ $or: [{ status: { $in: ['queued', 'generating', 'draft', 'failed', 'cancelled'] } }, { status: 'saved', draft: { $ne: null } }] }]; }
     if (kind) { filter.kind = kind; }
-    if (association) { filter.$and = [association]; }
+    if (q !== undefined) {
+      if (typeof q !== 'string' || q.length > 120) { throw new ChatError(400, 'invalid_search', 'Use a search phrase of up to 120 characters.'); }
+      if (q.trim()) { const escaped = q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); filter.$and = [...(filter.$and || []), { $or: [{ title: { $regex: escaped, $options: 'i' } }, { 'draft.title': { $regex: escaped, $options: 'i' } }, { 'content.title': { $regex: escaped, $options: 'i' } }] }]; }
+    }
+    if (association) { filter.$and = [...(filter.$and || []), association]; }
     if (cursor) {
       try {
         if (typeof cursor !== 'string' || cursor.length > 180 || !/^[A-Za-z0-9_-]+$/.test(cursor)) { throw new Error(); }

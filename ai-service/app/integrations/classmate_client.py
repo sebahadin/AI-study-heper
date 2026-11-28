@@ -23,9 +23,9 @@ class ClassmateClient:
         await self.http.aclose()
         await self.downloads.aclose()
 
-    async def request(self, path: str, body: dict, *, retrieval: bool = False):
+    async def request(self, path: str, body: dict, *, retrieval: bool = False, learning: bool = False):
         try:
-            base = self.settings.classmate_url.rstrip('/') + '/internal/retrieval' if retrieval else self.base
+            base = self.settings.classmate_url.rstrip('/') + '/internal/learning' if learning else self.settings.classmate_url.rstrip('/') + '/internal/retrieval' if retrieval else self.base
             async with self.http.stream('POST', base + path, json=body, headers={
                 'Authorization': 'Bearer ' + self.settings.service_token.get_secret_value(),
                 'X-Request-ID': str(uuid4()),
@@ -38,7 +38,7 @@ class ClassmateClient:
                         raise APIError(503, 'classmate_unavailable', 'The application response was too large.')
                     data.extend(chunk)
                 if not response.is_success:
-                    if retrieval and response.status_code == 404:
+                    if (retrieval or learning) and response.status_code == 404:
                         raise APIError(409, 'scope_changed', 'The selected study materials are no longer available.')
                     if response.status_code == 409:
                         raise APIError(409, 'indexing_lease_lost', 'The processing lease or configuration changed.')
@@ -105,3 +105,10 @@ class ClassmateClient:
             return tuple(Passage.model_validate(p) for p in result['passages'])
         except (ValidationError,KeyError,TypeError):
             raise APIError(503,'invalid_evidence_response','The source overview could not be verified.') from None
+
+    async def fetch_learning_context(self, *, context):
+        from app.schemas.learning import LearningContext
+        result = await self.request('/context', {'context': context.model_dump(mode='json')}, learning=True)
+        try: return LearningContext.model_validate(result)
+        except (ValidationError, KeyError, TypeError):
+            raise APIError(503, 'invalid_learning_context', 'The learning context could not be verified.') from None

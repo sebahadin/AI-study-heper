@@ -1,0 +1,25 @@
+import {useCallback,useEffect,useRef,useState} from 'react';
+import {api,ApiError,errorMessage} from '../services/api';
+import {attemptEdits,rememberAttempt,readAttempt,forgetAttempt,type QuizAttempt,type AttemptEdits} from '../services/learning';
+const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
+export function useQuizAttempt(id:string|undefined){
+ const [attempt,setAttempt]=useState<QuizAttempt|null>(null),[edits,setEdits]=useState<AttemptEdits|null>(null),[saving,setSaving]=useState(false),[error,setError]=useState(''),[conflict,setConflict]=useState(false),[recovery,setRecovery]=useState<AttemptEdits|null>(null),[recovered,setRecovered]=useState(false),[busy,setBusy]=useState(false);
+ const server=useRef<QuizAttempt|null>(null),local=useRef<AttemptEdits|null>(null),alive=useRef(true),persist=useRef(true),flight=useRef<Promise<void>|null>(null),timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined),route=useRef(id),requests=useRef(0);route.current=id;
+ const receive=useCallback((row:QuizAttempt,recover=false)=>{if(!alive.current||row._id!==route.current)return;requests.current++;server.current=row;let next=attemptEdits(row);setRecovery(null);setRecovered(false);
+  if(recover&&row.status==='in_progress'){const backup=readAttempt(row._id);if(backup&&backup.edits.position>=0&&backup.edits.position<row.questions.length&&Object.keys(backup.edits.answers).every(key=>row.questions.some(q=>q.id===key))&&backup.edits.marked.every(key=>row.questions.some(q=>q.id===key))&&!same(backup.edits,next)){if(backup.revision===row.revision){next=backup.edits;setRecovered(true);}else setRecovery(backup.edits);}}
+  local.current=next;setEdits(next);setAttempt(row);setError('');setConflict(false);if(same(next,attemptEdits(row)))forgetAttempt(row._id);
+ },[]);
+ const load=useCallback(async()=>{const request=++requests.current;const {attempt}=await api<{attempt:QuizAttempt}>(`/learning/attempts/${id}`);if(request===requests.current)receive(attempt,true);return attempt;},[id,receive]);
+ const change=useCallback((next:AttemptEdits)=>{local.current=next;setEdits(next);setError('');setRecovered(false);if(server.current?.status==='in_progress')rememberAttempt(server.current._id,server.current.revision,next);},[]);
+ const flush=useCallback(async()=>{clearTimeout(timer.current);if(flight.current)return flight.current;
+  const task=(async()=>{if(alive.current){setSaving(true);setError('');}try{while(persist.current&&server.current?.status==='in_progress'&&local.current&&!same(local.current,attemptEdits(server.current))){const row=server.current,snapshot=local.current;const {attempt}=await api<{attempt:QuizAttempt}>(`/learning/attempts/${row._id}`,{method:'PATCH',body:{revision:row.revision,...snapshot}});if(!persist.current||route.current!==row._id)return;requests.current++;server.current=attempt;if(alive.current)setAttempt(attempt);if(same(local.current,attemptEdits(attempt)))forgetAttempt(row._id);else if(local.current)rememberAttempt(row._id,attempt.revision,local.current);}}catch(e){if(alive.current){setError(errorMessage(e));setConflict(e instanceof ApiError&&e.status===409);}throw e;}finally{if(alive.current)setSaving(false);}})();flight.current=task;try{await task;}finally{if(flight.current===task)flight.current=null;}
+ },[]);
+ useEffect(()=>{alive.current=true;persist.current=true;const clear=()=>{persist.current=false;};window.addEventListener('classmate:study-drafts-cleared',clear);return()=>{alive.current=false;window.removeEventListener('classmate:study-drafts-cleared',clear);if(persist.current)void flush().catch(()=>{});};},[flush]);
+ const dirty=attempt?.status==='in_progress'&&!!edits&&!same(edits,attemptEdits(attempt));
+ useEffect(()=>{if(!dirty||error||busy||conflict||recovery)return;timer.current=setTimeout(()=>void flush().catch(()=>{}),800);return()=>clearTimeout(timer.current);},[dirty,edits,error,busy,conflict,recovery,flush]);
+ useEffect(()=>{const warn=(e:BeforeUnloadEvent)=>{if(server.current?.status==='in_progress'&&local.current&&!same(local.current,attemptEdits(server.current))){e.preventDefault();e.returnValue='';}};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);},[]);
+ async function perform(path:string,body:(row:QuizAttempt)=>unknown){setBusy(true);setError('');clearTimeout(timer.current);try{await flush();if(!server.current)return;const {attempt}=await api<{attempt:QuizAttempt}>(`/learning/attempts/${server.current._id}/${path}`,{method:'POST',body:body(server.current)});receive(attempt);return attempt;}catch(e){if(alive.current){setError(errorMessage(e));setConflict(e instanceof ApiError&&e.status===409);}return null;}finally{if(alive.current)setBusy(false);}}
+ function restore(){if(recovery){change(recovery);setRecovery(null);setRecovered(true);}}
+ function discard(){if(id)forgetAttempt(id);setRecovery(null);}
+ return {clearError:()=>setError(''),attempt,edits,load,change,flush,perform,receive,busy,saving,error,conflict,recovery,recovered,restore,discard,dirty};
+}

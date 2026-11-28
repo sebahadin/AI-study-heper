@@ -3,6 +3,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
+from app.api.learning import router as learning_router
 from app.api.study import router as study_router
 from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
@@ -41,4 +42,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(retrieval_router)
     app.include_router(chat_router)
     app.include_router(study_router)
+    app.include_router(learning_router)
     return app

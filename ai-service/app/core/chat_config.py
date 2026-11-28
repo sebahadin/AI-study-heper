@@ -13,6 +13,9 @@ class ChatSettings(BaseSettings):
     chat_router_model: str | None = None
     study_model_name: str | None = Field(default=None, validation_alias='AI_STUDY_MODEL')
     study_max_output_tokens: int = Field(default=6000, ge=1000, le=8000)
+    assessment_model_name: str | None = Field(default=None, validation_alias='AI_ASSESSMENT_MODEL')
+    coaching_model_name: str | None = Field(default=None, validation_alias='AI_COACHING_MODEL')
+    learning_max_output_tokens: int = Field(default=2000, ge=500, le=3000)
     chat_reasoning_effort: Literal['none', 'low', 'medium'] = 'none'
     chat_max_output_tokens: int = Field(default=1500, ge=128, le=3000)
     chat_max_input_tokens: int = Field(default=8000, ge=2000, le=12000)
@@ -26,6 +29,14 @@ class ChatSettings(BaseSettings):
     @property
     def study_model(self):
         return self.study_model_name or self.model
+
+    @property
+    def assessment_model(self):
+        return self.assessment_model_name or self.model
+
+    @property
+    def coaching_model(self):
+        return self.coaching_model_name or self.model
 
     @property
     def router_model(self):

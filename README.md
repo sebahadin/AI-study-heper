@@ -63,11 +63,23 @@ Default limits are 4,000 characters per question, 8,000 input tokens per model c
 
 Open **Study tools** or **Create study material** inside a note, PDF, book, or course. Create a summary, explanation, recall deck, or practice quiz from ready indexed materials. Chat can also prepare these drafts; use its study buttons or ask directly. A generated result is an editable draft, with source previews and an explicit description of its excerpt coverage.
 
-Review the content, edit its wording/answers/rubrics, and select **Review & save**. The confirmation applies only to the exact revision you reviewed. Saved-set edits remain draft changes until separately confirmed; deletion also requires confirmation. Repeated confirmation requests cannot create duplicate saved sets. **Create another draft** reuses the original scope and generation settings so you can adjust or regenerate after source changes. Drafts and saved sets persist in MongoDB until you delete them; source-version changes prevent stale drafts from being newly saved.
+Drafts open in a readable preview. Use **Edit draft** to change wording, answers, or rubrics; edits save privately in the background. If the connection fails, this tab keeps a recovery copy. A newer server revision requires your choice before restoring local edits. Sign-out clears local recovery copies. Select **Review & save** when ready. The confirmation applies only to the exact revision you reviewed. Saved-set edits remain draft changes until separately confirmed; deletion also requires confirmation. Repeated confirmation requests cannot create duplicate saved sets. **Create another draft** reuses the original scope and generation settings so you can adjust or regenerate after source changes. Drafts and saved sets persist in MongoDB until you delete them; source-version changes prevent stale drafts from being newly saved.
 
-Saved recall decks appear in **Flashcards**, saved quizzes in **Quiz**, and summaries in **Notes**, alongside the existing manually created materials. Decks use the existing accessible 3D flip. Quizzes support mixed multiple-choice, written, and coding questions. Choice answers receive deterministic feedback; written/code answers show reference answers, explanations, and self-review rubrics. The code editor supports syntax highlighting and normal Tab navigation. Code is never executed. Session answers remain in browser memory; durable attempts and AI assessment belong to the learning-feedback stage.
+The study workshop includes title search, saved/draft/type filters, and a resume shortcut. Saved quizzes and decks open directly into practice; sets with pending draft changes lead to review, with the saved version still available. Choose ready source materials and use optional starting ideas and question-count presets to shape a new draft.
+
+Saved recall decks appear in **Flashcards**, saved quizzes in **Quiz**, and summaries in **Notes**, alongside the existing manually created materials. Decks use the existing accessible 3D flip. Quizzes support mixed multiple-choice, written, and coding questions. Choice answers receive deterministic feedback; written/code answers show reference answers, explanations, and self-review rubrics. Jump between questions without losing answers, mark questions for another look, or shuffle a deck. On a focused flashcard, Space/Enter flips it and the left/right arrows move through the deck. Touch and reduced-motion settings are supported. The code editor supports syntax highlighting and normal Tab navigation. Code is never executed. Draft previews stay in browser memory. Saved AI quizzes and existing flashcard quizzes use recorded attempts, described below.
 
 The default is five questions/cards, controlled by `DEFAULT_QUESTION_COUNT` in `ai-service/app/core/constants.py`; the form reads this policy from Python. Requests can choose 1–10 items and automatic, choice, written, or code quiz formats. Automatic mode chooses formats appropriate to the material. Generation uses the configured chat model unless `AI_STUDY_MODEL` is set, with a default 6,000-token output cap (`AI_STUDY_MAX_OUTPUT_TOKENS`), a 90-second deadline, and the shared daily AI quotas. Existing server-side provider keys are reused. The editor and its language support load only when needed.
+
+## Learning history and study coaching
+
+Open **Your learning** to resume an unfinished quiz, review past results, revisit mistakes, and explore study suggestions. Saved AI quizzes and course/book flashcard quizzes keep their question snapshot, draft answers, submitted answers, review flags, and results in MongoDB. A quiz edit or deletion does not rewrite earlier attempts. Starting the same unchanged quiz resumes its unfinished attempt; **Try this quiz again** starts a fresh attempt after completion. Existing manual quizzes use up to 100 flashcards per attempt (`MAX_MANUAL_QUESTIONS`).
+
+Answers save as you work. This tab also keeps an interruption-recovery copy; a conflicting server revision requires your choice before restoration. Submitted answers are fixed for that attempt. Choice questions are scored in Express against the saved answer key. For written/code questions, choose **Submit & get AI feedback**, or submit for self-review and request assessment later. AI feedback includes points and reasons for each saved rubric criterion. Assessments are advisory; code is inspected and never executed. Revealed and unanswered questions earn no points, and the combined result remains provisional while submitted open answers await assessment.
+
+The dashboard shows unfinished sessions and current library entry points without calling an LLM. **Prepare study suggestions** explicitly runs the coach and library recommender; unchanged results are cached. Suggestions use a bounded selection of relevant recent attempts and chat interests. Choice scores stay separate from AI assessments. Recommended IDs and links must resolve to the user's current owned catalog; external recommendations are disabled. Chat can also review performance or recommend materials within its selected study scope. Coaching prepares suggestions and never changes library content.
+
+Assessment and coaching reuse server-side provider credentials and the configured chat model. Optional `AI_ASSESSMENT_MODEL` and `AI_COACHING_MODEL` override their roles; `AI_LEARNING_MAX_OUTPUT_TOKENS` defaults to 2,000. Each explicit assessment or coaching request uses the shared daily quota; coaching has two bounded specialist calls. Calls have timeouts, no automatic paid retries, and expiring leases so interrupted requests can be retried without duplicate completed assessments. Private prompts and answers are not traced. Quiz history is retained in MongoDB; deleting an original study set preserves historical results.
 
 ## Production build
 
@@ -91,7 +103,7 @@ Express serves `frontend/dist` and supports direct navigation and refresh on Rea
 - Discuss indexed notes and PDFs in Study chat. Select individual materials, books, courses, or your library; add a topic focus; read streamed answers with verified source previews; stop a response; and reopen saved conversations.
 - Confirm deletions. Deleting a book unlinks its notes and removes its flashcard tags while preserving both. Cards with no remaining books stay available for editing or removal.
 
-Quiz scores stay in browser memory and are not persisted. The existing favorite flag is preserved in MongoDB, without adding a new favorite control. Study chat and AI study tools are available. Persistent attempt history, AI assessment of open answers, and personalized coaching are later stages.
+Saved-quiz and manual flashcard-quiz attempts persist across refresh, logout, and later sessions. Draft previews remain temporary. The existing favorite flag is preserved in MongoDB, without adding a new favorite control.
 
 ## API
 
@@ -121,7 +133,14 @@ Endpoints return JSON, except chat answer streams (server-sent events), PDF file
 | `/api/study-tools/:id/generate` and `/cancel` | POST | Stream generation status or stop it |
 | `/api/study-tools/:id/confirmations` and `/actions` | POST | Review the exact save/update/delete and apply its confirmation |
 | `/api/study-tools/:id/practice` and `/sources/:number` | GET | Answer-key-free quiz controls or a verified source excerpt |
-| `/api/study-tools/:id/feedback` | POST | Choice feedback or written/code self-review reference and rubric |
+| `/api/study-tools/:id/feedback` | POST | Stateless preview feedback and reference rubrics |
+| `/api/learning` | GET | Recent results, resume links, current library suggestions and cached coaching |
+| `/api/learning/coaching` | POST | Explicitly prepare or reuse personalized study suggestions |
+| `/api/learning/attempts` | GET, POST | Paginated history; start/resume from a saved quiz, manual scope or earlier attempt |
+| `/api/learning/attempts/:id` | GET, PATCH | Owned snapshot/progress; autosave unfinished answers, position and review flags |
+| `/api/learning/attempts/:id/answers/:question` | POST | Submit an answer or record an answer reveal |
+| `/api/learning/attempts/:id/assessments/:question` | POST | Request/reuse a rubric-based AI assessment |
+| `/api/learning/attempts/:id/complete` | POST | Finish and preserve the attempt's results |
 
 Materials accept an optional `courses` array of owned course IDs; an omitted array preserves membership on PATCH. Filter books, notes, or flashcards with `?course=courseId`, or `?course=none` for materials with no direct or inherited course. Course material assignments accept `{ "kind": "books" | "notes" | "flashcards", "ids": [...] }`; all IDs must belong to the signed-in user. This changes only the selected course’s direct assignments.
 
@@ -131,7 +150,7 @@ Note writes accept `title`, optional `book` (an owned book ID or `null`), and ei
 
 Study search accepts `{ "query": "What supplies energy to cells?", "scope": { "courses": ["courseId"] }, "limit": 6 }`. A scope can select `documents`, `notes`, `books`, and `courses`; their selections are combined. Book/course scopes include their currently linked notes and PDFs. Use `{ "library": true }` explicitly for the whole library. An empty scope returns no passages. Only your current, ready source versions are searched; select a narrower scope if more than 100 indexed sources match.
 
-Search returns `{ "query", "passages", "sources" }`, including PDF page or note paragraph citations and links to the original material. Results contain at most 12 passages and 12,000 characters. Study chat uses these same retrieval boundaries for its answers. The internal read tools are `search_materials`, `fetch_passages`, and the bounded `read_material_overview`; the application supplies their identity and scope.
+Search returns `{ "query", "passages", "sources" }`, including PDF page or note paragraph citations and links to the original material. Results contain at most 12 passages and 12,000 characters. Study chat uses these same retrieval boundaries for its answers. The internal read tools are `search_materials`, `fetch_passages`, the bounded `read_material_overview`, `read_quiz_performance`, and `find_library_materials`; the application supplies their identity and scope.
 
 Errors have `{ "error": "message", "fields": { "field": "message" } }`; `fields` is optional. Protected endpoints return HTTP 401; missing or inaccessible records return 404; invalid input returns 400; duplicate registration returns 409. Every record operation and book association is scoped to the authenticated user. Cross-site writes are rejected.
 
@@ -151,7 +170,7 @@ The default backend test run covers validation, cleanup, and HTTP boundaries. To
 TEST_DSN=mongodb://127.0.0.1:27017/classmate_test npm test --prefix backend
 ```
 
-Those integration tests create users and study records, then drop that test database. They are skipped when `TEST_DSN` is not supplied. Frontend tests cover protected navigation, session restore/logout, registration feedback, quiz scoring, chat history/scope/source UI, split streaming frames, and safe Markdown. Python unit tests run with `uv run --directory ai-service --locked pytest`. The opt-in real-provider chat test uses only synthetic material in a disposable MongoDB/Chroma stack and makes a few billed calls:
+Those integration tests create users and study records, then drop that test database. They are skipped when `TEST_DSN` is not supplied. Frontend tests cover protected navigation, session restore/logout, registration feedback, recorded practice and recovery, explicit coaching, chat history/scope/source UI, split streaming frames, and safe Markdown. Python unit tests run with `uv run --directory ai-service --locked pytest`. The opt-in real-provider chat test uses only synthetic material in a disposable MongoDB/Chroma stack and makes a few billed calls:
 
 ```sh
 cd ai-service
@@ -163,4 +182,11 @@ The study-tool integration test is also opt-in and uses only synthetic notes/PDF
 ```sh
 cd ai-service
 RUN_STUDY_LIVE_TEST=1 uv run --locked pytest tests/integration/test_study_tools_live.py
+```
+
+The opt-in learning integration check uses synthetic quizzes, real rubric assessment and coaching, and disposable services:
+
+```sh
+cd ai-service
+RUN_LEARNING_LIVE_TEST=1 uv run --locked pytest tests/integration/test_learning_live.py
 ```

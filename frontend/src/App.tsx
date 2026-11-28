@@ -12,6 +12,8 @@ import { FlashcardEditor, FlashcardList } from './pages/flashcards/FlashcardPage
 import { CourseList, CourseEditor, CourseDetail } from './pages/courses/CoursePages';
 import { QuizPage } from './pages/flashcards/QuizPage';
 
+const LearningPage = lazy(() => import('./pages/learning/LearningPage'));
+const AttemptPractice = lazy(() => import('./pages/learning/AttemptPractice'));
 const StudyTools = lazy(() => import('./pages/study-tools/StudyToolsPage'));
 const StudyDetail = lazy(() => import('./pages/study-tools/StudyDetail'));
 const StudyPractice = lazy(() => import('./pages/study-tools/StudyPractice'));
@@ -37,6 +39,8 @@ export default function App() {
     <Route path="login" element={<AuthPage key="login" />} />
     <Route path="register" element={<AuthPage key="register" register />} />
     <Route element={<ProtectedRoute />}>
+      <Route path="learning" element={<LearningPage />} />
+      <Route path="learning/attempts/:id" element={<AttemptPractice />} />
       <Route path="study-tools" element={<StudyTools />} />
       <Route path="study-tools/new" element={<StudyTools create />} />
       <Route path="study-tools/:id" element={<StudyDetail />} />

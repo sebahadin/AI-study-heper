@@ -76,10 +76,11 @@ export class ChatService {
     const [courses, books, notes, documents] = await Promise.all([
       Course.find({ user }).select('title code').sort({ title: 1 }).limit(500).lean(),
       Book.find({ user }).select('title author').sort({ title: 1 }).limit(500).lean(),
-      Note.find({ user }).select('title').sort({ title: 1 }).limit(500).lean(),
-      Document.find({ user, status: 'uploaded' }).select('title filename').sort({ title: 1 }).limit(500).lean(),
+      Note.find({ user }).select('title indexing.status').schemaLevelProjections(false).sort({ title: 1 }).limit(500).lean(),
+      Document.find({ user, status: 'uploaded' }).select('title filename indexing.status pageCount').sort({ title: 1 }).limit(500).lean(),
     ]);
-    return { courses, books, notes, documents };
+    const material = row => ({ _id: row._id, title: row.title, ...(row.filename && { filename: row.filename }), indexingStatus: ['ready', 'queued', 'processing', 'failed'].includes(row.indexing?.status) ? row.indexing.status : 'not_requested', ...(row.pageCount && { pageCount: row.pageCount }) });
+    return { courses, books, notes: notes.map(material), documents: documents.map(material) };
   }
   async prepare(user, id, body) {
     if (!plainObject(body) || Object.keys(body).some(key => !['requestId', 'content'].includes(key)) || !uuid(body.requestId)
@@ -104,7 +105,7 @@ export class ChatService {
     const result = messages.filter(entry => entry.status === 'completed').map(entry => {
       const unavailableSource = entry.role === 'assistant' && ((entry.citations || []).some(c => !allowed.has(sourceKey(c.source)))
         || !allowGeneral && ['general', 'mixed'].includes(entry.mode));
-      return { role: entry.role, content: unavailableSource ? '[An earlier answer is outside the current source scope. Retrieve fresh evidence.]' : entry.content,
+      return { role: entry.role, content: entry.mode === 'coaching' ? '[Earlier coaching is historical. Use current learning tools for fresh results.]' : unavailableSource ? '[An earlier answer is outside the current source scope. Retrieve fresh evidence.]' : entry.content,
         citations: unavailableSource ? [] : (entry.citations || []).map(({ number, ...citation }) => ({ number, ...citation })) };
     }).slice(-12);
     while (result.length && Buffer.byteLength(JSON.stringify(result)) > 60000) { result.shift(); }
@@ -166,6 +167,7 @@ export class ChatService {
           if (event.draft && event.mode === 'draft' && this.studyTools) {
             const proposal = await this.studyTools.fromChat(user, conversation, run, event.draft);
             verified = { content: `Your ${proposal.kind === 'flashcards' ? 'flashcard deck' : proposal.kind} draft is ready to review. Nothing has been saved to your library.`, mode: 'draft', citations: [], proposalId: proposal._id, proposalKind: proposal.kind };
+          } else if (event.mode === 'coaching' && event.coaching && this.learning) { verified = await this.learning.fromChat(user, context, event.coaching);
           } else { verified = await this.final(user, conversation, context, event); }
           const record = await this.repository.finish(user, id, run, { ...verified, status: 'completed', model: typeof event.model === 'string' ? event.model.slice(0, 100) : '',
             usage: event.usage && { inputTokens: Number(event.usage.input_tokens) || 0, outputTokens: Number(event.usage.output_tokens) || 0 } });

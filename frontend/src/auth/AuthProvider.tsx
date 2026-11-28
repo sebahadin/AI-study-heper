@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { clearStudyDraftBackups } from '../services/studyDraftBackup';
 import { api, ApiError, errorMessage } from '../services/api';
 import type { User } from '../types';
 
@@ -26,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((data) => { if (active) { setUser(data.user); } })
       .catch((reason) => {
         if (active) {
+          if(reason instanceof ApiError && reason.status===401)clearStudyDraftBackups();
           setUser(null);
           if (!(reason instanceof ApiError && reason.status === 401)) { setError(errorMessage(reason)); }
         }
@@ -34,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { active = false; };
   }, [revision]);
   useEffect(() => {
-    const expire = () => setUser(null);
+    const expire = () => {clearStudyDraftBackups();setUser(null);};
     window.addEventListener('classmate:unauthenticated', expire);
     return () => window.removeEventListener('classmate:unauthenticated', expire);
   }, []);
@@ -45,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function logout() {
     try { await api<void>('/auth/logout', { method: 'POST' }); }
     catch (reason) { if (!(reason instanceof ApiError && reason.status === 401)) { throw reason; } }
+    clearStudyDraftBackups();
     setUser(null);
   }
   return <AuthContext.Provider value={{ user, loading, error, refresh, login, logout }}>{children}</AuthContext.Provider>;

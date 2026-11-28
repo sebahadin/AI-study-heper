@@ -23,3 +23,5 @@
   .chat-stream-status{min-height:1rem}
   .chat-composer-bottom{padding:.25rem .5rem .4rem}
 }
+
+.scope-index-state{margin-left:auto;flex-shrink:0;font-size:.6rem;color:var(--muted);border:1px solid var(--border);border-radius:1rem;padding:.1rem .4rem}.scope-index-state--ready{color:var(--primary);background:var(--primary-wash)}

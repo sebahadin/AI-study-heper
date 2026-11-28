@@ -1,0 +1,7 @@
+import type {QuizAttempt,LearningDashboard} from '../../services/learning';
+export const attemptFixture:QuizAttempt={_id:'attempt-1',title:'Python foundations',origin:'generated',studyId:'set-1',status:'in_progress',revision:0,position:0,marked:[],createdAt:'2026-11-27T12:00:00Z',updatedAt:'2026-11-27T12:00:00Z',completedAt:null,citations:[],answers:{},assessments:{},questions:[
+ {id:'q1',kind:'choice',prompt:'Which sequence is ordered?',options:['List','Set'],language:'',starterCode:'',citationNumbers:[],maxPoints:1},
+ {id:'q2',kind:'written',prompt:'Explain an accumulator.',options:[],language:'',starterCode:'',citationNumbers:[],maxPoints:2},
+ {id:'q3',kind:'code',prompt:'Sum a list.',options:[],language:'python',starterCode:'# Start here',citationNumbers:[],maxPoints:3}],
+ summary:{total:3,submitted:0,revealed:0,skipped:0,earned:0,possible:6,percentage:null,choice:{earned:0,possible:1,answered:0,correct:0},ai:{earned:0,possible:5,graded:0,pending:0},misses:[]}};
+export const dashboardFixture:LearningDashboard={stats:{completed:1,choiceCorrect:0,choiceAnswered:1,aiAssessed:0,aiEarned:0,aiPossible:0},canCoach:true,coverage:'Up to 12 recent attempts.',resume:[attemptFixture],revisit:[{questionId:'q1',topic:'Which sequence is ordered?',reason:'Incorrect choice',attemptId:'old-attempt',title:'Python foundations'}],recommendations:[{id:'book:book-1',type:'book',title:'Python lists',href:'/books/book-1',hint:'Lists and loops',reason:'A starting point from your own library.'}],coaching:null,coachingBusy:false};

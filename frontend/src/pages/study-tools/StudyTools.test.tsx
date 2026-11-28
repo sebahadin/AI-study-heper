@@ -6,6 +6,7 @@ import StudyDetail from './StudyDetail';
 import StudyPractice from './StudyPractice';
 import StudyToolsPage from './StudyToolsPage';
 import {StudyMarkdown} from './StudyShared';
+import {rememberDraft} from '../../services/studyDraftBackup';
 import {streamDraft,type StudyArtifact,type PracticeSet,type StudyDraft} from '../../services/studyTools';
 vi.mock('../../services/studyTools',async original=>({...await original<typeof import('../../services/studyTools')>(),streamDraft:vi.fn()}));
 vi.mock('../../components/CodeAnswerEditor',()=>({default:({value,onChange,label,readOnly}:{value:string;onChange:(v:string)=>void;label:string;readOnly:boolean})=><textarea aria-label={label} value={value} readOnly={readOnly} onChange={e=>onChange(e.target.value)}/>}));
@@ -13,17 +14,18 @@ Object.defineProperty(HTMLDialogElement.prototype,'showModal',{configurable:true
 const citation={number:1,chunk_id:'note-'+'a'.repeat(64),source:{source_id:'note-1',source_type:'note' as const,source_version:'v1',index_generation:'g1'},locator:'paragraph 1',title:'Cell energy',href:'/notes/note-1'};
 const draft:StudyDraft={kind:'summary',title:'Cell energy summary',body:'Mitochondria supply ATP [1].',cards:[],questions:[],citations:[citation],coverage:{passages:1,coveredSources:1,totalSources:1,excerpted:true}};
 const initial:StudyArtifact={_id:'set-1',kind:'summary',title:draft.title,status:'draft',revision:1,savedRevision:0,updatedAt:'2026-11-27T12:00:00Z',hasDraft:true,count:0,request:{kind:'summary',selection:{library:false,notes:['note-1'],documents:[],books:[],courses:[]},topic:'',instruction:'',count:5,format:'auto'},draft,content:null,busy:false,error:null};
-let saved=structuredClone(initial),rejectAction=false;
-const practice:PracticeSet={_id:'quiz-1',title:'Python practice',kind:'quiz',revision:3,saved:true,citations:[citation],questions:[
+let saved=structuredClone(initial),rejectAction=false,materialStatus='ready';
+const practice:PracticeSet={_id:'quiz-1',title:'Python practice',kind:'quiz',revision:3,saved:false,citations:[citation],questions:[
  {id:'q1',kind:'choice',prompt:'Which sequence is ordered?',options:['List','Set'],language:'',starterCode:'',citationNumbers:[1]},
  {id:'q2',kind:'written',prompt:'Explain what an accumulator does.',options:[],language:'',starterCode:'',citationNumbers:[1]},
  {id:'q3',kind:'code',prompt:'Write a Python sum function.',options:[],language:'python',starterCode:'pass',citationNumbers:[1]}
 ]};
-beforeEach(()=>{saved=structuredClone(initial);rejectAction=false;vi.mocked(streamDraft).mockReset();vi.stubGlobal('fetch',vi.fn(async(input,init)=>{
+beforeEach(()=>{saved=structuredClone(initial);rejectAction=false;materialStatus='ready';sessionStorage.clear();vi.mocked(streamDraft).mockReset();vi.stubGlobal('fetch',vi.fn(async(input,init)=>{
  const path=String(input),body=init?.body?JSON.parse(String(init.body)):{};
  if(path==='/api/study-tools/config')return Response.json({enabled:true,defaultCount:7,maxCount:10,model:'test'});
- if(path==='/api/chat/options')return Response.json({notes:[{_id:'note-1',title:'Cell energy'}],books:[],courses:[],documents:[]});
+ if(path==='/api/chat/options')return Response.json({notes:[{_id:'note-1',title:'Cell energy',indexingStatus:materialStatus}],books:[],courses:[],documents:[]});
  if(path==='/api/study-tools'&&init?.method==='POST')return Response.json({artifact:{...saved,status:'queued'}});
+ if(path.startsWith('/api/study-tools?'))return Response.json({artifacts:[saved],nextCursor:null});
  if(path.endsWith('/practice'))return Response.json(practice);
  if(path.endsWith('/feedback'))return Response.json(body.questionId==='q1'?{kind:'choice',correct:body.answer===0&&!body.reveal,correctIndex:0,revealed:body.reveal,explanation:'A list is ordered.'}:{kind:body.questionId==='q3'?'code':'written',referenceAnswer:body.questionId==='q3'?'return sum(values)':'It collects a result.',rubric:[{description:'Accumulate the correct result.',maxPoints:2}],selfReview:true,explanation:'Use a neutral starting value.'});
  if(path.includes('/sources/'))return Response.json({passage:{text:'Mitochondria supply ATP.'},href:'/notes/note-1'});
@@ -33,20 +35,20 @@ beforeEach(()=>{saved=structuredClone(initial);rejectAction=false;vi.mocked(stre
  if(init?.method==='PATCH'){saved={...saved,draft:body.draft,revision:saved.revision+1};return Response.json({artifact:saved});}
  return Response.json({artifact:saved});
 }));});
-function mount(element:React.ReactNode,path='/study-tools/set-1'){return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/study-tools/new" element={element}/><Route path="/study-tools/:id" element={element}/><Route path="/study-tools/:id/practice" element={element}/></Routes></MemoryRouter>);}
+function mount(element:React.ReactNode,path='/study-tools/set-1'){return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/study-tools" element={element}/><Route path="/study-tools/new" element={element}/><Route path="/study-tools/:id" element={element}/><Route path="/study-tools/:id/practice" element={element}/></Routes></MemoryRouter>);}
 describe('Complete study tools interface',()=>{
  it('keeps edits private until the user reviews and confirms the exact revision',async()=>{
-  const user=userEvent.setup();mount(<StudyDetail/>);const title=await screen.findByLabelText('Title');await user.clear(title);await user.type(title,'My cell summary');await user.click(screen.getByRole('button',{name:'Review & save'}));
+  const user=userEvent.setup();mount(<StudyDetail/>);await user.click(await screen.findByRole('button',{name:'Edit draft'}));const title=await screen.findByLabelText('Title');await user.clear(title);await user.type(title,'My cell summary');await user.click(screen.getByRole('button',{name:'Review & save'}));
   const dialog=await screen.findByRole('dialog',{name:'Save study set?'});expect(within(dialog).getByText('My cell summary',{selector:'strong'})).toBeVisible();
   expect(vi.mocked(fetch).mock.calls.some(([p])=>String(p).endsWith('/actions'))).toBe(false);
   const confirm=vi.mocked(fetch).mock.calls.find(([p])=>String(p).endsWith('/confirmations'));expect(JSON.parse(String(confirm?.[1]?.body)).revision).toBe(2);
   await user.click(within(dialog).getByRole('button',{name:'Save study set'}));await screen.findByText('Saved to your study sets.');expect(saved.content?.title).toBe('My cell summary');
  });
  it('surfaces stale confirmation errors and keeps the review open for user control',async()=>{
-  rejectAction=true;const user=userEvent.setup();mount(<StudyDetail/>);await screen.findByLabelText('Title');await user.click(screen.getByRole('button',{name:'Review & save'}));const dialog=await screen.findByRole('dialog');await user.click(within(dialog).getByRole('button',{name:'Save study set'}));expect(await within(dialog).findByRole('alert')).toHaveTextContent('draft changed');expect(saved.status).toBe('draft');
+  rejectAction=true;const user=userEvent.setup();mount(<StudyDetail/>);await screen.findByRole('button',{name:'Read preview'});await user.click(screen.getByRole('button',{name:'Review & save'}));const dialog=await screen.findByRole('dialog');await user.click(within(dialog).getByRole('button',{name:'Save study set'}));expect(await within(dialog).findByRole('alert')).toHaveTextContent('draft changed');expect(saved.status).toBe('draft');
  });
  it('requires a separate confirmation before deleting a generated study set',async()=>{
-  const user=userEvent.setup();mount(<StudyDetail/>);await screen.findByLabelText('Title');await user.click(screen.getByRole('button',{name:'Delete study set'}));const dialog=await screen.findByRole('dialog',{name:'Delete?'});expect(vi.mocked(fetch).mock.calls.some(([p])=>String(p).endsWith('/actions'))).toBe(false);await user.click(within(dialog).getByRole('button',{name:'Go back'}));expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(saved.status).toBe('draft');
+  const user=userEvent.setup();mount(<StudyDetail/>);await screen.findByRole('button',{name:'Read preview'});await user.click(screen.getByRole('button',{name:'Delete study set'}));const dialog=await screen.findByRole('dialog',{name:'Delete?'});expect(vi.mocked(fetch).mock.calls.some(([p])=>String(p).endsWith('/actions'))).toBe(false);await user.click(within(dialog).getByRole('button',{name:'Go back'}));expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(saved.status).toBe('draft');
  });
  it('uses the server-owned default count and selected note when creating a draft request',async()=>{
   const user=userEvent.setup();mount(<StudyToolsPage create/>,'/study-tools/new?kind=quiz&note=note-1');await waitFor(()=>expect(screen.getByRole('spinbutton',{name:'Questions'})).toHaveValue(7));await user.click(screen.getByRole('button',{name:'Generate draft'}));await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([p,init])=>p==='/api/study-tools'&&init?.method==='POST')).toBe(true));const call=vi.mocked(fetch).mock.calls.find(([p,init])=>p==='/api/study-tools'&&init?.method==='POST');expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({kind:'quiz',count:7,selection:{notes:['note-1']}});
@@ -62,4 +64,43 @@ describe('Complete study tools interface',()=>{
  it('renders generated Markdown without loading images or raw HTML',()=>{
   const {container}=render(<StudyMarkdown text={'<script>alert(1)</script>\n![tracking](https://example.com/pixel)\n[unsafe](javascript:alert(1))'}/>);expect(container.querySelector('script')).toBeNull();expect(container.querySelector('img')).toBeNull();expect(container.querySelector('a')).toBeNull();
  });
+ it('opens in a readable preview and collapses long source lists until requested',async()=>{
+  const user=userEvent.setup();saved={...saved,draft:{...draft,citations:Array.from({length:6},(_,i)=>({...citation,number:i+1,title:'Source '+(i+1)}))}};mount(<StudyDetail/>);
+  expect(await screen.findByText('Mitochondria supply ATP [1].')).toBeVisible();expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
+  expect(screen.getAllByRole('button',{name:/Source [1-6] paragraph/})).toHaveLength(3);await user.click(screen.getByRole('button',{name:'Show all 6 sources'}));expect(screen.getAllByRole('button',{name:/Source [1-6] paragraph/})).toHaveLength(6);
+ });
+ it('keeps rubric checkboxes separate for each question when navigating back and forth',async()=>{
+  const user=userEvent.setup();mount(<StudyPractice/>,'/study-tools/quiz-1/practice');await screen.findByText('Which sequence is ordered?');
+  await user.click(screen.getByRole('button',{name:'Question 2'}));await user.type(screen.getByLabelText('Your answer'),'Accumulate values.');await user.click(screen.getByRole('button',{name:'Compare with reference'}));await user.click(await screen.findByRole('checkbox',{name:/Accumulate the correct result/}));
+  await user.click(screen.getByRole('button',{name:'Question 3'}));await user.click(screen.getByRole('button',{name:'Compare with reference'}));expect(await screen.findByRole('checkbox',{name:/Accumulate the correct result/})).not.toBeChecked();
+  await user.click(screen.getByRole('button',{name:'Question 2, reviewed'}));expect(screen.getByRole('checkbox',{name:/Accumulate the correct result/})).toBeChecked();
+ });
+ it('marks a question for another look without losing the current answer',async()=>{
+  const user=userEvent.setup();mount(<StudyPractice/>,'/study-tools/quiz-1/practice');await screen.findByText('Which sequence is ordered?');await user.click(screen.getByRole('radio',{name:'A List'}));await user.click(screen.getByRole('button',{name:'Review later'}));
+  await user.click(screen.getByRole('button',{name:'Question 2'}));await user.click(screen.getByRole('button',{name:'Question 1, marked for review'}));expect(screen.getByRole('radio',{name:'A List'})).toBeChecked();expect(screen.getByRole('button',{name:'Marked for review'})).toHaveAttribute('aria-pressed','true');
+ });
+ it('offers direct practice from saved library cards and filters with a literal search query',async()=>{
+  saved={...saved,kind:'quiz',status:'saved',hasDraft:false,title:'Python practice',draft:null,content:{...draft,kind:'quiz'},count:5};const user=userEvent.setup();mount(<StudyToolsPage/>,'/study-tools');
+  await screen.findByRole('link',{name:'Details for Python practice'});expect(screen.getAllByRole('link',{name:/Practice quiz/}).some(link=>link.getAttribute('href')==='/study-tools/set-1/practice')).toBe(true);
+  await user.click(screen.getByRole('searchbox',{name:'Search study sets'}));await user.paste('[0]');await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([path])=>String(path).includes('q=%5B0%5D'))).toBe(true));
+ });
+
+ it('opens recovered edits to a saved set as a private draft that can be reviewed',async()=>{
+  saved={...saved,status:'saved',hasDraft:false,content:draft,draft:null};rememberDraft('set-1',saved.revision,{...draft,title:'Recovered local changes'});mount(<StudyDetail/>);
+  expect(await screen.findByText('Recovered your latest draft edits from this tab.')).toBeVisible();expect(await screen.findByRole('button',{name:'Review changes'})).toBeEnabled();
+  expect(screen.getByRole('heading',{name:'Recovered local changes',level:1})).toBeVisible();expect(saved.content?.title).toBe('Cell energy summary');
+ });
+ it('prioritizes pending draft changes while keeping practice of the saved version accessible',async()=>{
+  saved={...saved,kind:'quiz',status:'saved',title:'Python practice',content:{...draft,kind:'quiz'},count:5};mount(<StudyToolsPage/>,'/study-tools');
+  const savedPractice=await screen.findByRole('link',{name:'Practice saved version of Python practice'});expect(savedPractice).toHaveAttribute('href','/study-tools/set-1/practice');
+  expect(screen.getAllByRole('link',{name:/Review changes/}).every(link=>link.getAttribute('href')==='/study-tools/set-1')).toBe(true);expect(screen.getByText('Practice quiz · Saved · Draft changes')).toBeVisible();
+ });
+
+ it('shows selected material titles and blocks generation while every selected source is unready',async()=>{
+  materialStatus='processing';const user=userEvent.setup();mount(<StudyToolsPage create/>,'/study-tools/new?kind=summary&note=note-1');
+  await screen.findByText('Cell energy');expect(await screen.findByText(/These materials are still indexing/)).toBeVisible();expect(screen.getByRole('button',{name:'Generate draft'})).toBeDisabled();
+  await user.click(screen.getByRole('button',{name:'Key takeaways'}));expect(screen.getByRole('textbox',{name:/What would you like/})).toHaveValue('Summarize the key ideas and how they connect.');
+  expect(vi.mocked(fetch).mock.calls.some(([,init])=>init?.method==='POST')).toBe(false);
+ });
+
 });

@@ -12,6 +12,7 @@ import { Icon, type IconName } from './Icon';
 
 const navigation: { path: string; title: string; icon: IconName; section: string }[] = [
   { path: '/dashboard', title: 'Dashboard', icon: 'dashboard', section: 'Dashboard' },
+  { path: '/learning', title: 'Your learning', icon: 'clock', section: 'Your learning' },
   { path: '/study-tools', title: 'Study tools', icon: 'spark', section: 'Study tools' },
   { path: '/chat', title: 'Study chat', icon: 'chat', section: 'Study chat' },
   { path: '/courses', title: 'Courses', icon: 'courses', section: 'Courses' },
@@ -35,7 +36,7 @@ export function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const section = location.pathname.startsWith('/study-tools') ? 'Study tools' : location.pathname.startsWith('/chat') ? 'Study chat' : location.pathname.startsWith('/courses') ? 'Courses' : location.pathname.startsWith('/books') ? 'Books' : location.pathname.startsWith('/documents') ? 'Documents' : location.pathname.startsWith('/notes') ? 'Notes' : location.pathname.startsWith('/flashcards/quiz') ? 'Quiz' : location.pathname.startsWith('/flashcards') ? 'Flashcards' : 'Dashboard';
+  const section = location.pathname.startsWith('/learning') ? 'Your learning' : location.pathname.startsWith('/study-tools') ? 'Study tools' : location.pathname.startsWith('/chat') ? 'Study chat' : location.pathname.startsWith('/courses') ? 'Courses' : location.pathname.startsWith('/books') ? 'Books' : location.pathname.startsWith('/documents') ? 'Documents' : location.pathname.startsWith('/notes') ? 'Notes' : location.pathname.startsWith('/flashcards/quiz') ? 'Quiz' : location.pathname.startsWith('/flashcards') ? 'Flashcards' : 'Dashboard';
   useEffect(() => {
     if (mobileOpen) { dialog.current?.showModal(); }
     else if (dialog.current?.open) { dialog.current.close(); }

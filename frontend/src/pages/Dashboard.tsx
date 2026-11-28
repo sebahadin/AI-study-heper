@@ -1,3 +1,4 @@
+import {lazy,Suspense} from 'react';
 import { Link } from 'react-router-dom';
 import { useResource } from '../hooks/useResource';
 import type { DashboardData } from '../types';
@@ -6,6 +7,7 @@ import { PageHeader, EmptyState, BookCover } from '../components/PageElements';
 import { Icon } from '../components/Icon';
 import { OrbitScene } from '../components/OrbitScene';
 
+const LearningWidget=lazy(()=>import('./learning/LearningWidget'));
 export function Dashboard() {
   const { data, loading, error, reload } = useResource<DashboardData>('/dashboard');
   if (loading) { return <Loading />; }
@@ -19,6 +21,7 @@ export function Dashboard() {
   return <>
     <PageHeader title="Dashboard" description="A clear space for everything you’re learning." />
     <section className="welcome-hero"><div className="hero-grid" /><div className="hero-copy"><span className="eyebrow hero-eyebrow"><span />A little curiosity. A lot of possibility.</span><h3>Make your next<br />connection.</h3><p>Your reading, your ideas, a little practice.<br className="desktop-break" /> Pick up something worth understanding.</p>{data.notes[0] && <Link className="dashboard-resume" to={`/notes/${data.notes[0]._id}`}><span className="dashboard-resume-icon"><Icon name="note" size={22} /></span><span><small>Your latest note</small><strong>{data.notes[0].title}</strong><span>Return to this idea</span></span><Icon name="book" size={21} /></Link>}<div className="actions"><Link className="btn primary" to={data.flashcardsCount ? '/flashcards/list?review=1' : '/notes/add'}><Icon name={data.flashcardsCount ? 'cards' : 'edit'} size={17} />{data.flashcardsCount ? 'Start a review' : 'Write a note'}</Link><Link className="btn ghost" to="/courses">Explore your courses</Link></div></div><OrbitScene /></section>
+    <Suspense fallback={null}><LearningWidget/></Suspense>
     <div className="stats-grid stats-grid--courses study-overview-strip">{stats.map((stat) => <Link className={`stat-card stat-card--${stat.tone}`} key={stat.title} to={stat.to}><span className="stat-icon"><Icon name={stat.icon} size={22} /></span><div><strong>{stat.value}</strong><span>{stat.title}</span></div></Link>)}</div>
     <section className="panel dashboard-courses"><header className="panel-heading"><div><span className="eyebrow">Everything, connected</span><h3>Your courses</h3></div><Link className="text-link" to="/courses">View courses</Link></header>{data.courses?.length ? <div className="dashboard-course-grid">{data.courses.slice(0, 3).map(course => <Link className={`dashboard-course course-tone--${course.color}`} to={`/courses/${course._id}`} key={course._id}><span><Icon name="courses" size={24} /></span><div><small>{course.code || course.term || 'Course'}</small><h4>{course.title}</h4><p>{course.counts?.books || 0} books · {course.counts?.notes || 0} notes · {course.counts?.flashcards || 0} flashcards</p></div></Link>)}</div> : <EmptyState icon="courses" title="Give each subject a home" description="Organize your books, notes, and flashcards into courses. Your existing materials are ready to connect." to="/courses/add" label="Add a course" />}</section>
     <div className="dashboard-main-grid"><section className="panel recent-notes" id="notes"><header className="panel-heading"><div><span className="eyebrow">Catch that thought</span><h3>Recent notes</h3></div><Link className="text-link" to="/notes">View all notes</Link></header>

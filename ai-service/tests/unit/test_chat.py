@@ -56,7 +56,7 @@ async def test_actual_graph_streams_read_tools_and_validated_citations():
 async def test_empty_scope_does_not_answer_from_general_knowledge_by_default():
  req,p=fixture(sources=False);models=Models();r=Retriever(req,p)
  events=[e async for e in stream_chat(request=req,models=models,retriever=r)]
- assert events[-1]['mode']=='insufficient_evidence' and not events[-1]['citations'] and models.plans==0
+ assert events[-1]['mode']=='insufficient_evidence' and not events[-1]['citations'] and models.plans==1
 
 async def test_general_knowledge_requires_explicit_opt_in_and_is_labeled():
  req,p=fixture(general=True,sources=False);models=Models('<mode>general</mode>\nThis is general knowledge.');models.plans=1

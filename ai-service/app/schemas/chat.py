@@ -5,7 +5,7 @@ from app.schemas.context import ExecutionContext
 from app.core.constants import DEFAULT_QUESTION_COUNT
 from app.schemas.evidence import Citation
 
-ChatMode = Literal['grounded', 'general', 'mixed', 'clarification', 'insufficient_evidence', 'draft']
+ChatMode = Literal['grounded', 'general', 'mixed', 'clarification', 'insufficient_evidence', 'draft', 'coaching']
 
 
 class NumberedCitation(Citation):
@@ -29,7 +29,7 @@ class ChatRequest(Contract):
 
 
 class ChatPlan(Contract):
-    action: Literal['search_materials', 'fetch_passages', 'answer', 'clarify', 'unsupported', 'summarize', 'explain', 'generate_flashcards', 'generate_quiz']
+    action: Literal['search_materials', 'fetch_passages', 'answer', 'clarify', 'unsupported', 'summarize', 'explain', 'generate_flashcards', 'generate_quiz', 'review_performance', 'recommend_materials']
     query: str = Field(max_length=160)
     chunk_ids: list[str] = Field(max_length=12)
     clarification: str = Field(max_length=300)

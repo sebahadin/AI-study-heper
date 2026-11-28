@@ -63,6 +63,19 @@ integration('Confirmed AI study sets (requires TEST_DSN)',()=>{
   const edited=(await alice.patch(`/api/study-tools/${row._id}`).send({revision:row.revision,draft}).expect(200)).body.artifact;
   expect(edited.draft.questions[0].prompt).to.include('values[0]');expect(edited.draft.questions[0].citationNumbers).to.deep.equal([1]);
  });
+ it('searches literal titles across drafts and saved sets while preserving ownership and course filters',async()=>{
+  const row=await generate('summary');const edited=(await alice.patch(`/api/study-tools/${row._id}`).send({revision:row.revision,draft:{...row.draft,title:'Array [0] notes'}}).expect(200)).body.artifact;
+  const page=(await alice.get('/api/study-tools').query({q:'[0]',course:String(course._id)}).expect(200)).body;expect(page.artifacts.map(r=>r._id)).to.deep.equal([edited._id]);
+  expect((await alice.get('/api/study-tools').query({q:'.*'}).expect(200)).body.artifacts).to.deep.equal([]);
+  expect((await bob.get('/api/study-tools').query({q:'[0]'}).expect(200)).body.artifacts).to.deep.equal([]);
+  await alice.get('/api/study-tools').query({q:'x'.repeat(121)}).expect(400);
+ });
+ it('exposes safe material readiness and avoids charging a generation turn when no source is ready',async()=>{
+  let options=(await alice.get('/api/chat/options').expect(200)).body;expect(options.notes[0].indexingStatus).to.equal('ready');expect(JSON.stringify(options)).not.to.match(/sourceVersion|activeGeneration|passages|embeddingModel/);
+  await Note.updateOne({_id:ref.source_id},{'indexing.status':'queued'});const row=await create();
+  const stream=events(await alice.post(`/api/study-tools/${row._id}/generate`).send({}).expect(200));expect(stream.find(e=>e.type==='error').code).to.equal('insufficient_evidence');expect(calls).to.equal(0);expect(await ChatQuota.countDocuments({})).to.equal(0);
+  options=(await alice.get('/api/chat/options').expect(200)).body;expect(options.notes[0].indexingStatus).to.equal('queued');
+ });
  it('requires exact user confirmation and handles concurrent repeated saves without duplicates',async()=>{
   const row=await generate();await alice.post(`/api/study-tools/${row._id}/actions`).send({action:'save',revision:row.revision}).expect(400);
   const confirmation=await confirm(row);await bob.post(`/api/study-tools/${row._id}/actions`).send({action:confirmation.action,revision:confirmation.revision,token:confirmation.token}).expect(404);
@@ -94,6 +107,15 @@ integration('Confirmed AI study sets (requires TEST_DSN)',()=>{
   await alice.post(`/api/study-tools/${row._id}/feedback`).send({revision:practice.revision,questionId:'q1',answer:0}).expect(200);
   await apply(edited,await confirm(edited,'update')).expect(200);
   await alice.post(`/api/study-tools/${row._id}/feedback`).send({revision:practice.revision,questionId:'q1',answer:0}).expect(409);
+ });
+ it('includes pending changes to saved sets in the drafts filter and preserves search and ownership',async()=>{
+  let row=await generate('summary');row=(await apply(row,await confirm(row)).expect(200)).body.artifact;
+  expect((await alice.get('/api/study-tools').query({status:'drafts'}).expect(200)).body.artifacts).to.have.length(0);
+  await alice.patch(`/api/study-tools/${row._id}`).send({revision:row.revision,draft:{...row.content,title:'Pending [edit]'}}).expect(200);
+  const query={status:'drafts',q:'[edit]',course:String(course._id)};
+  expect((await alice.get('/api/study-tools').query(query).expect(200)).body.artifacts.map(item=>item._id)).to.deep.equal([row._id]);
+  expect((await bob.get('/api/study-tools').query({status:'drafts',q:'[edit]'}).expect(200)).body.artifacts).to.have.length(0);
+  expect((await alice.get('/api/study-tools').query({status:'drafts',q:'missing'}).expect(200)).body.artifacts).to.have.length(0);
  });
  it('returns deterministic choice feedback and labeled written/code reference rubrics without executing code',async()=>{
   const row=await generate(),base={revision:row.revision};

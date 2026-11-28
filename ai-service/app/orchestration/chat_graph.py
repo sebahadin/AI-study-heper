@@ -40,6 +40,7 @@ def build_chat_graph(*, request, models, retriever):
         return {'plan': plan}
 
     def next_node(state):
+        if state['plan'].action in ('review_performance', 'recommend_materials'): return 'learning_tool'
         if state['plan'].action in ('summarize','explain','generate_flashcards','generate_quiz'): return 'study_tool'
         if state['plan'].action in ('search_materials', 'fetch_passages') and state['steps'] < 2: return 'read_tools'
         return 'tutor'
@@ -81,6 +82,14 @@ def build_chat_graph(*, request, models, retriever):
             writer({'type':'final','answer':'The selected excerpts do not support that draft. Choose other indexed materials or narrow the task.','mode':'insufficient_evidence','citations':[],'model':models.settings.model,'usage':state['stats']})
         return {}
 
+    async def learning_tool(state):
+        from app.orchestration.learning_graph import run_learning
+        writer = get_stream_writer(); writer({'type': 'status', 'phase': 'reading'})
+        context = await retriever.classmate.fetch_learning_context(context=request.context)
+        result = await run_learning(context=context, models=models, goal=request.message)
+        writer({'type': 'final', 'mode': 'coaching', 'coaching': result, 'answer': 'Your study suggestions are ready.', 'citations': [], 'model': result['model'], 'usage': {key: state['stats'].get(key, 0)+result['usage'].get(key, 0) for key in ('input_tokens', 'output_tokens')}})
+        return {}
+
     async def tutor(state):
         writer = get_stream_writer(); plan = state['plan']
         if plan.action == 'clarify':
@@ -111,7 +120,7 @@ def build_chat_graph(*, request, models, retriever):
         return {}
 
     graph = StateGraph(ChatState)
-    graph.add_node('study_tool',study_tool); graph.add_node('supervisor', supervisor); graph.add_node('read_tools', read_tools); graph.add_node('tutor', tutor); graph.add_node('verify', verify)
+    graph.add_node('learning_tool',learning_tool); graph.add_edge('learning_tool',END); graph.add_node('study_tool',study_tool); graph.add_node('supervisor', supervisor); graph.add_node('read_tools', read_tools); graph.add_node('tutor', tutor); graph.add_node('verify', verify)
     graph.add_edge(START, 'supervisor'); graph.add_conditional_edges('supervisor', next_node)
     graph.add_edge('study_tool',END); graph.add_edge('read_tools','supervisor'); graph.add_edge('tutor','verify'); graph.add_edge('verify',END)
     return graph.compile()

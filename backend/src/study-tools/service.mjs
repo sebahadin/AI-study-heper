@@ -75,8 +75,10 @@ export class StudyService {
     let timer, completed = false;
     try {
       if (controller.signal.aborted) { return; }
-      await this.chat.repository.quota(user, this.chat.dailyTurns, this.chat.globalTurns);
+      yield { type: 'status', phase: 'searching' };
       const resolved = await this.search.resolver.resolve(user, row.request.selection);
+      if (!resolved.sources.length) { fail(422, 'insufficient_evidence'); }
+      await this.chat.repository.quota(user, this.chat.dailyTurns, this.chat.globalTurns);
       const context = { user_id: String(user), proposal_id: id, run_id: run.id,
         scope: { scope_id: id, selection: row.request.selection, sources: resolved.sources } };
       timer = setInterval(() => { void this.repository.heartbeat(user, id, run).then(record => { if (!record.modifiedCount) { controller.abort(); } }).catch(() => controller.abort()); }, 10000);
