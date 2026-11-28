@@ -49,7 +49,13 @@ Background verification requeues materials if their published Chroma passages ar
 
 ## Study chat
 
-Open **Study chat** in the navigation or **Ask Classmate** inside a note, PDF, book, or course. Choose your study scope and ask a question. Book and course scopes include linked notes and PDFs; a book record alone does not contain readable book text. Materials need a Ready index status before chat can use them.
+Open **Study chat** in the navigation or **Ask Classmate** inside a note, PDF, book, or course. Choose your study scope and ask a question. Book and course scopes include linked notes and PDFs; a book record alone does not contain readable book text. Semantic retrieval needs a Ready index status. Library browsing and current note text can be read without a vector index.
+
+Chat can also browse your application records directly. Try **“list all my books,” “what PDF documents do I have,” “do I have a biology course,” “show notes in Biology,”** or **“what is linked to this book?”** Inventory replies show current owned records and links under **From your library**; they do not turn into coaching. Large lists include exact totals and paginated results; ask for the next page or open a returned item. Tools cover books, courses, notes, uploads, manual flashcards, generated study sets, quiz attempts and conversations. Existing study-space selections remain enforced, including for unindexed materials.
+
+The executable catalog tools are `get_library_overview`, `list_library_items`, `get_library_item`, and `explore_connections`. Tool arguments and results use Pydantic contracts; the LangGraph router uses structured output and receives the tool descriptions and schemas. Express checks the active conversation, owner and scope, then re-reads and renders current records. Titles, IDs, counts and links are not taken from model-written prose. Ambiguous names prompt a choice. Note/PDF/content and conversation excerpts are bounded; book records hold metadata, with readable study text in their linked notes/PDFs.
+
+Every model role shares a Classmate assistant identity prompt. Greetings and identity/help questions have a direct assistant route; performance analysis and recommendations run only for those requests. The assistant is built by Classmate using configured model providers. Generated library changes continue to require review and confirmation.
 
 Answers stream as provisional drafts, then their citation references are checked against current authorized passages before the final answer is saved. Click a numbered source to read the cited passage and open its original note or PDF page. Questions unsupported by the selected material receive an explicit acknowledgment. General explanations require opting in under **Study scope** and are labeled separately. Retrieved text cannot expand the assistant's permissions. The assistant can prepare editable study drafts. Library changes require a separate user review and confirmation through Express.
 
@@ -189,4 +195,11 @@ The opt-in learning integration check uses synthetic quizzes, real rubric assess
 ```sh
 cd ai-service
 RUN_LEARNING_LIVE_TEST=1 uv run --locked pytest tests/integration/test_learning_live.py
+```
+
+The catalog-routing regression uses synthetic records and opt-in real model calls:
+
+```sh
+cd ai-service
+RUN_LIBRARY_LIVE_TEST=1 uv run --locked pytest tests/integration/test_library_chat_live.py
 ```

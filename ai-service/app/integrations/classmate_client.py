@@ -23,9 +23,9 @@ class ClassmateClient:
         await self.http.aclose()
         await self.downloads.aclose()
 
-    async def request(self, path: str, body: dict, *, retrieval: bool = False, learning: bool = False):
+    async def request(self, path: str, body: dict, *, retrieval: bool = False, learning: bool = False, library: bool = False):
         try:
-            base = self.settings.classmate_url.rstrip('/') + '/internal/learning' if learning else self.settings.classmate_url.rstrip('/') + '/internal/retrieval' if retrieval else self.base
+            base = self.settings.classmate_url.rstrip('/') + '/internal/library' if library else self.settings.classmate_url.rstrip('/') + '/internal/learning' if learning else self.settings.classmate_url.rstrip('/') + '/internal/retrieval' if retrieval else self.base
             async with self.http.stream('POST', base + path, json=body, headers={
                 'Authorization': 'Bearer ' + self.settings.service_token.get_secret_value(),
                 'X-Request-ID': str(uuid4()),
@@ -38,8 +38,12 @@ class ClassmateClient:
                         raise APIError(503, 'classmate_unavailable', 'The application response was too large.')
                     data.extend(chunk)
                 if not response.is_success:
-                    if (retrieval or learning) and response.status_code == 404:
+                    if (retrieval or learning or library) and response.status_code == 404:
                         raise APIError(409, 'scope_changed', 'The selected study materials are no longer available.')
+                    if retrieval and response.status_code == 409:
+                        code = json.loads(data).get('code')
+                        if code == 'scope_too_large': raise APIError(409, code, 'Choose a smaller study scope for passage retrieval.')
+                        if code == 'scope_changed': raise APIError(409, code, 'The study scope changed.')
                     if response.status_code == 409:
                         raise APIError(409, 'indexing_lease_lost', 'The processing lease or configuration changed.')
                     if response.status_code in (400, 413, 415, 422):
@@ -112,3 +116,10 @@ class ClassmateClient:
         try: return LearningContext.model_validate(result)
         except (ValidationError, KeyError, TypeError):
             raise APIError(503, 'invalid_learning_context', 'The learning context could not be verified.') from None
+
+    async def query_library(self, operation, *, arguments, context):
+        from app.schemas.library import LibraryResult
+        result = await self.request('/query', {'context': context.model_dump(mode='json'), 'operation': operation, 'arguments': arguments.model_dump(mode='json')}, library=True)
+        try: return LibraryResult.model_validate(result)
+        except (ValidationError, KeyError, TypeError):
+            raise APIError(503, 'invalid_library_response', 'The library results could not be verified.') from None

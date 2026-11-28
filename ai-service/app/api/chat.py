@@ -55,7 +55,8 @@ async def stream(request: Request):
                     yield 'data: '+json.dumps(event, ensure_ascii=False)+'\n\n'
         except asyncio.CancelledError: raise
         except Exception as error:
-            code = error.code if isinstance(error,APIError) and error.code in ('model_unavailable','response_invalid','chat_context_too_long','draft_invalid','source_changed') else 'chat_unavailable'
+            code = error.code if isinstance(error,APIError) and error.code in ('model_unavailable','response_invalid','chat_context_too_long','draft_invalid','source_changed','scope_too_large','scope_changed') else 'chat_unavailable'
+            if code == 'scope_changed': code = 'source_changed'
             yield 'data: '+json.dumps({'type':'error','code':code})+'\n\n'
         finally:
             try: await workflow.aclose()

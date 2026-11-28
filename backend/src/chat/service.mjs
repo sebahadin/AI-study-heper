@@ -9,9 +9,9 @@ import { CHAT_MAX_MESSAGES, CHAT_MAX_INPUT, CHAT_MAX_ANSWER, ChatError, chatFail
 
 const unavailable = () => new ChatError(503, 'chat_unavailable', chatFailures.chat_unavailable);
 const missing = () => new ChatError(404, 'conversation_not_found', 'Conversation not found.');
-const modes = new Set(['grounded', 'general', 'mixed', 'clarification', 'insufficient_evidence']);
+const modes = new Set(['grounded', 'general', 'mixed', 'clarification', 'insufficient_evidence', 'assistant']);
 export const publicMessage = entry => ({ id: entry.id, requestId: entry.requestId, sequence: entry.sequence, role: entry.role, content: entry.content,
-  status: entry.status, mode: entry.mode, citations: entry.citations || [], createdAt: entry.createdAt, model: entry.model, proposalId: entry.proposalId ? String(entry.proposalId) : null, proposalKind: entry.proposalKind,
+  status: entry.status, mode: entry.mode, citations: entry.citations || [], createdAt: entry.createdAt, model: entry.model, proposalId: entry.proposalId ? String(entry.proposalId) : null, proposalKind: entry.proposalKind, library: entry.library || null,
   error: entry.errorCode ? chatFailures[entry.errorCode] || chatFailures.chat_unavailable : null });
 export const publicConversation = convo => ({ _id: String(convo._id), title: convo.title, selection: convo.selection, topic: convo.topic,
   allowGeneral: convo.allowGeneral, updatedAt: convo.updatedAt, messageCount: convo.messageCount, busy: !!convo.activeRun, activeRunId: convo.activeRun?.id || null,
@@ -101,12 +101,12 @@ export class ChatService {
     return { ...started, history: conversation.messages };
   }
   history(messages, refs, allowGeneral) {
-    const allowed = new Set(refs.map(sourceKey));
+    const allowed = new Set((refs || []).map(sourceKey));
     const result = messages.filter(entry => entry.status === 'completed').map(entry => {
-      const unavailableSource = entry.role === 'assistant' && ((entry.citations || []).some(c => !allowed.has(sourceKey(c.source)))
+      const unavailableSource = entry.role === 'assistant' && (refs !== null && (entry.citations || []).some(c => !allowed.has(sourceKey(c.source)))
         || !allowGeneral && ['general', 'mixed'].includes(entry.mode));
-      return { role: entry.role, content: entry.mode === 'coaching' ? '[Earlier coaching is historical. Use current learning tools for fresh results.]' : unavailableSource ? '[An earlier answer is outside the current source scope. Retrieve fresh evidence.]' : entry.content,
-        citations: unavailableSource ? [] : (entry.citations || []).map(({ number, ...citation }) => ({ number, ...citation })) };
+      return { role: entry.role, content: entry.mode === 'library' ? '[Earlier library results are historical. Browse current records before answering a new library question.]' : entry.mode === 'coaching' ? '[Earlier coaching is historical. Use current learning tools for fresh results.]' : unavailableSource ? '[An earlier answer is outside the current source scope. Retrieve fresh evidence.]' : entry.content,
+        library: entry.library || null, citations: unavailableSource ? [] : (entry.citations || []).map(({ number, ...citation }) => ({ number, ...citation })) };
     }).slice(-12);
     while (result.length && Buffer.byteLength(JSON.stringify(result)) > 60000) { result.shift(); }
     return result;
@@ -118,7 +118,7 @@ export class ChatService {
     const references = referencedNumbers(result.answer);
     if (references.some(number => !result.citations.some(c => c.number === number))
         || ['grounded', 'mixed'].includes(result.mode) && !references.length
-        || ['general', 'clarification', 'insufficient_evidence'].includes(result.mode) && result.citations.length) {
+        || ['general', 'clarification', 'insufficient_evidence', 'assistant'].includes(result.mode) && result.citations.length) {
       throw new ChatError(503, 'response_invalid', chatFailures.response_invalid);
     }
     if (!references.length) { return { content: result.answer, mode: result.mode, citations: [] }; }
@@ -147,12 +147,12 @@ export class ChatService {
     let completed = false, total = 0, heartbeat;
     try {
       await this.repository.quota(user, this.dailyTurns, this.globalTurns);
-      const resolved = await this.search.resolver.resolve(user, conversation.selection);
+      await this.fields(user, { selection: conversation.selection }, true);
       const context = { user_id: String(user), conversation_id: id, run_id: run.id,
-        scope: { scope_id: `${id}:${conversation.revision}`, selection: conversation.selection, topics: conversation.topic ? [conversation.topic] : [], sources: resolved.sources } };
+        scope: { scope_id: `${id}:${conversation.revision}`, selection: conversation.selection, topics: conversation.topic ? [conversation.topic] : [], sources: [] } };
       heartbeat = setInterval(() => { void this.repository.heartbeat(user, id, run.id).then(record => { if (!record.modifiedCount) {controller.abort();} }).catch(() => controller.abort()); }, 10000);
       let receivedFinal = false;
-      for await (const event of this.client.stream({ message: started.question.content, history: this.history(started.history, resolved.sources, conversation.allowGeneral), context,
+      for await (const event of this.client.stream({ message: started.question.content, history: this.history(started.history, null, conversation.allowGeneral), context,
         topic: conversation.topic, allow_general: conversation.allowGeneral }, controller.signal)) {
         if (controller.signal.aborted) { break; }
         if (event.type === 'delta') {
@@ -167,6 +167,7 @@ export class ChatService {
           if (event.draft && event.mode === 'draft' && this.studyTools) {
             const proposal = await this.studyTools.fromChat(user, conversation, run, event.draft);
             verified = { content: `Your ${proposal.kind === 'flashcards' ? 'flashcard deck' : proposal.kind} draft is ready to review. Nothing has been saved to your library.`, mode: 'draft', citations: [], proposalId: proposal._id, proposalKind: proposal.kind };
+          } else if (event.mode === 'library' && event.library_request && this.library) { verified = await this.library.fromChat(context, event.library_request);
           } else if (event.mode === 'coaching' && event.coaching && this.learning) { verified = await this.learning.fromChat(user, context, event.coaching);
           } else { verified = await this.final(user, conversation, context, event); }
           const record = await this.repository.finish(user, id, run, { ...verified, status: 'completed', model: typeof event.model === 'string' ? event.model.slice(0, 100) : '',

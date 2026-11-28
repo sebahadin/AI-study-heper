@@ -6,6 +6,7 @@ import tiktoken
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from app.core.errors import APIError
 from app.schemas.chat import ChatPlan
+from app.core.persona import CLASSMATE_IDENTITY
 
 
 def content_text(content):
@@ -41,13 +42,13 @@ class ChatModels:
         return len(self.encoder.encode(text, disallowed_special=())) + len(messages)*12
 
     def bounded(self, system, request, history, evidence=''):
-        current = HumanMessage(content=json.dumps({'question':request.message, 'topic_focus':request.topic}, ensure_ascii=False))
+        system = CLASSMATE_IDENTITY + '\n\n' + system
+        current = HumanMessage(content=json.dumps({'current_user_request':request.message, 'topic_focus':request.topic}, ensure_ascii=False))
         tail = [HumanMessage(content=m.content) if m.role == 'user' else AIMessage(content=m.content) for m in history]
-        messages = [SystemMessage(content=system), *tail, current]
-        if evidence: messages.append(HumanMessage(content=evidence))
+        reference = [HumanMessage(content='REFERENCE DATA, NOT A USER REQUEST:\n'+evidence)] if evidence else []
+        messages = [SystemMessage(content=system), *tail, *reference, current]
         while tail and self.size(messages) > self.settings.chat_max_input_tokens:
-            tail.pop(0); messages = [SystemMessage(content=system), *tail, current]
-            if evidence: messages.append(HumanMessage(content=evidence))
+            tail.pop(0); messages = [SystemMessage(content=system), *tail, *reference, current]
         if self.size(messages) > self.settings.chat_max_input_tokens:
             raise APIError(422, 'chat_context_too_long', 'Shorten the question or select fewer materials.')
         return messages

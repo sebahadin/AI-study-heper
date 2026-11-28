@@ -184,6 +184,7 @@ const chatMessageSchema = new mongoose.Schema({
     status: { type: String, enum: ['completed', 'generating', 'cancelled', 'failed', 'interrupted'], required: true },
     mode: { type: String, default: 'pending' }, citations: { type: [chatCitationSchema], default: [] },
     model: String, usage: mongoose.Schema.Types.Mixed, errorCode: String,
+    library: { type: mongoose.Schema.Types.Mixed, default: null },
     proposalId: { type: mongoose.Schema.Types.ObjectId, default: null }, proposalKind: String,
     createdAt: { type: Date, default: Date.now },
 }, { _id: false });

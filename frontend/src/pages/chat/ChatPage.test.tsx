@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import ChatPage from './ChatPage';
@@ -85,6 +85,19 @@ describe('Complete study-chat interface',()=>{
   await user.click(screen.getByRole('button',{name:'Conversation actions'}));await user.click(screen.getByRole('menuitem',{name:'Delete conversation'}));
   expect(screen.getByRole('button',{name:'Yes, remove'})).toBeVisible();
   expect(vi.mocked(fetch).mock.calls.some(([,init])=>init?.method==='DELETE')).toBe(false);
+ });
+ it('lets a reader return to the newest messages without losing the composer',async()=>{
+  const user=userEvent.setup();mount();await screen.findByText('Mitochondria supply ATP [1].');const region=screen.getByRole('region',{name:'Conversation messages'});
+  Object.defineProperties(region,{scrollHeight:{configurable:true,value:1200},clientHeight:{configurable:true,value:300},scrollTop:{configurable:true,writable:true,value:0}});fireEvent.scroll(region);
+  await user.click(await screen.findByRole('button',{name:'Jump to latest'}));expect(region.scrollTop).toBe(1200);expect(screen.getByRole('textbox',{name:'Message Classmate'})).toHaveFocus();expect(screen.queryByRole('button',{name:'Jump to latest'})).not.toBeInTheDocument();
+ });
+ it('labels catalog answers separately and opens canonical local record links',()=>{
+  render(<MemoryRouter><ChatMessage message={{...answer,mode:'library',citations:[],content:'Your books: [Biology](/books/'+ 'a'.repeat(24)+')'}} onSource={()=>{}}/></MemoryRouter>);
+  expect(screen.getByText('From your library')).toBeVisible();expect(screen.getByRole('link',{name:'Biology'})).toHaveAttribute('href','/books/'+'a'.repeat(24));expect(screen.queryByText('From your study history')).not.toBeInTheDocument();
+ });
+ it('keeps external links and unsafe images disabled in library answers',()=>{
+  const {container}=render(<MemoryRouter><ChatMessage message={{...answer,mode:'library',citations:[],content:'[outside](https://example.com) ![image](https://example.com/image.png)'}} onSource={()=>{}}/></MemoryRouter>);
+  expect(container.querySelector('a')).toBeNull();expect(container.querySelector('img')).toBeNull();
  });
  it('renders Markdown safely without loading model-generated tracking images or HTML',()=>{
   const {container}=render(<ChatMessage message={{...answer,content:'<script>alert(1)</script>\n![tracking](https://example.com/pixel)\n[unsafe](javascript:alert(1))'}} onSource={()=>{}}/>);

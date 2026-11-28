@@ -25,3 +25,7 @@
 }
 
 .scope-index-state{margin-left:auto;flex-shrink:0;font-size:.6rem;color:var(--muted);border:1px solid var(--border);border-radius:1rem;padding:.1rem .4rem}.scope-index-state--ready{color:var(--primary);background:var(--primary-wash)}
+
+.chat-composer-wrap{position:relative}.chat-jump-latest{position:absolute;right:1.2rem;bottom:calc(100% + .4rem);display:flex;align-items:center;gap:.45rem;padding:.4rem .7rem;background:var(--surface-alt);color:var(--primary);border:1px solid var(--border);border-radius:2rem;font:inherit;font-size:.68rem;cursor:pointer;box-shadow:0 3px 12px #0002;z-index:1}
+
+.chat-markdown a{color:var(--primary);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}.chat-markdown a:hover,.chat-markdown a:focus-visible{text-decoration-thickness:2px}

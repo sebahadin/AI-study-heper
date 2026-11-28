@@ -118,7 +118,7 @@ async def test_context_budget_removes_old_history_without_truncating_source_pass
  models=ChatModels(settings)
  history=tuple(HistoryMessage(role='user',content='Old text '*1000) for _ in range(10))
  messages=models.bounded('System rules',req,history,'Canonical source passage')
- assert models.size(messages)<=2000 and messages[-1].content=='Canonical source passage'
+ assert models.size(messages)<=2000 and messages[-2].content.endswith('Canonical source passage') and 'current_user_request' in messages[-1].content
 
 
 async def test_stopping_stream_cancels_the_running_tutor():

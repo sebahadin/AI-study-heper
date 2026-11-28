@@ -1,3 +1,5 @@
+import { LibraryService } from './library/service.mjs';
+import { createInternalLibraryRouter } from './routes/library.mjs';
 import { LearningRepository } from './learning/repository.mjs';
 import { LearningService } from './learning/service.mjs';
 import { AiLearningClient } from './integrations/ai-learning.mjs';
@@ -30,7 +32,7 @@ import { createDocumentsRouter } from './routes/documents.mjs';
 import { createDocumentJobsRouter } from './routes/document-jobs.mjs';
 import { createDocumentJobService } from './documents/job-service.mjs';
 
-export function createApp({ sessionStore, frontendDirectory, documentService, documentJobsService, studySearchService, chatService, studyToolsService, learningService, internalServiceToken = settings.aiServiceToken } = {}) {
+export function createApp({ sessionStore, frontendDirectory, documentService, documentJobsService, studySearchService, chatService, studyToolsService, learningService, libraryService, internalServiceToken = settings.aiServiceToken } = {}) {
   const app = express();
   app.disable('x-powered-by');
   if (settings.production) {
@@ -43,6 +45,8 @@ export function createApp({ sessionStore, frontendDirectory, documentService, do
   chat.studyTools = studyTools;
   const learning = learningService || new LearningService({ repository: new LearningRepository(), chat, client: new AiLearningClient({ baseUrl: settings.aiServiceUrl, token: settings.aiServiceToken }) });
   chat.learning = learning;
+  const library = libraryService || new LibraryService(); chat.library = library;
+  app.use('/internal/library', createInternalLibraryRouter(library, { token: internalServiceToken }));
   app.use('/internal/learning', createInternalLearningRouter(learning, { token: internalServiceToken }));
   app.use('/internal/retrieval', createInternalRetrievalRouter(search, { token: internalServiceToken }));
   app.use('/internal/document-jobs', createDocumentJobsRouter(jobs, { token: internalServiceToken }));

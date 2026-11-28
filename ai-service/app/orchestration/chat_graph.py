@@ -24,7 +24,8 @@ class ChatState(TypedDict, total=False):
 def build_chat_graph(*, request, models, retriever):
     tools = {tool.name: tool for tool in create_material_tools(retriever=retriever, context=request.context)}
 
-    async def history_current():
+    async def history_current(refresh=False):
+        if not refresh: return request.history
         current = await retriever._current_context(request.context)
         allowed = set(current.scope.sources)
         result = []
@@ -40,6 +41,8 @@ def build_chat_graph(*, request, models, retriever):
         return {'plan': plan}
 
     def next_node(state):
+        if state['plan'].action in ('list_library_items', 'get_library_item', 'explore_connections', 'get_library_overview'): return 'library_tool'
+        if state['plan'].action == 'respond': return 'assistant_reply'
         if state['plan'].action in ('review_performance', 'recommend_materials'): return 'learning_tool'
         if state['plan'].action in ('summarize','explain','generate_flashcards','generate_quiz'): return 'study_tool'
         if state['plan'].action in ('search_materials', 'fetch_passages') and state['steps'] < 2: return 'read_tools'
@@ -47,8 +50,13 @@ def build_chat_graph(*, request, models, retriever):
 
     async def read_tools(state):
         plan = state['plan']; get_stream_writer()({'type':'status', 'phase':'searching' if plan.action=='search_materials' else 'reading'})
+        empty_scope = False
         try:
-            if plan.action == 'search_materials':
+            current = await retriever._current_context(request.context)
+            empty_scope = not current.scope.sources
+            if empty_scope:
+                passages = ()
+            elif plan.action == 'search_materials':
                 result = await tools['search_materials'].ainvoke({'query':plan.query, 'limit':6}, config={'callbacks':[]})
                 passages = EvidenceBundle.model_validate(result).passages
             else:
@@ -56,21 +64,40 @@ def build_chat_graph(*, request, models, retriever):
                 result = await tools['fetch_passages'].ainvoke({'chunk_ids':plan.chunk_ids}, config={'callbacks':[]})
                 passages = tuple(Passage.model_validate(row) for row in result)
         except (ValidationError, APIError) as error:
-            if isinstance(error, APIError) and error.status_code >= 500: raise
+            if isinstance(error, APIError) and (error.status_code >= 500 or error.code in ('scope_too_large', 'scope_changed')): raise
             passages = ()
         found = {p.citation.chunk_id: p for p in (*state['evidence'], *passages)}
         evidence, characters = [], 0
         for passage in found.values():
             if len(evidence) < 12 and characters + len(passage.text) <= 12000:
                 evidence.append(passage); characters += len(passage.text)
-        return {'evidence':tuple(evidence), 'steps':state['steps']+1}
+        return {'evidence':tuple(evidence), 'steps':2 if empty_scope else state['steps']+1}
+
+    async def library_tool(state):
+        from app.tools.library import create_library_tools
+        from app.schemas.library import LibraryResult
+        plan = state['plan']; writer = get_stream_writer(); writer({'type': 'status', 'phase': 'reading'})
+        library_tools = {tool.name: tool for tool in create_library_tools(classmate=retriever.classmate, context=request.context)}
+        arguments = plan.library.model_dump(mode='json')
+        result = LibraryResult.model_validate(await library_tools[plan.action].ainvoke(arguments, config={'callbacks': []}))
+        # Express re-executes the authorized query and renders canonical current data.
+        # Neither model prose nor a forged tool-result title can become a library fact.
+        writer({'type': 'final', 'mode': 'library', 'answer': 'Library results are ready.', 'citations': [],
+            'library_request': {'operation': plan.action, 'arguments': arguments}, 'model': models.settings.router_model if hasattr(models.settings, 'router_model') else models.settings.model, 'usage': state['stats']})
+        return {}
+
+    async def assistant_reply(state):
+        from app.core.persona import ASSISTANT_REPLIES
+        writer = get_stream_writer()
+        writer({'type': 'final', 'mode': 'assistant', 'answer': ASSISTANT_REPLIES[state['plan'].response_kind], 'citations': [], 'model': models.settings.model, 'usage': state['stats']})
+        return {}
 
     async def study_tool(state):
         from app.schemas.study import StudyRequest
         from app.orchestration.study_graph import stream_study
         plan=state['plan'];kind={'summarize':'summary','explain':'explanation','generate_flashcards':'flashcards','generate_quiz':'quiz'}[plan.action]
         writer=get_stream_writer()
-        study=StudyRequest(kind=kind,instruction=request.message,topic=request.topic,count=plan.count,format=plan.format,context=request.context)
+        study=StudyRequest(kind=kind,instruction=request.message+(('\nResolved study focus: '+plan.query) if plan.query else ''),topic=request.topic,count=plan.count,format=plan.format,context=request.context)
         try:
             async with aclosing(stream_study(request=study,models=models,retriever=retriever)) as stream:
                 async for event in stream:
@@ -101,7 +128,7 @@ def build_chat_graph(*, request, models, retriever):
         else:
             writer({'type':'status','phase':'writing'})
             evidence = await retriever.fetch([p.citation.chunk_id for p in state['evidence']], context=request.context) if state['evidence'] else ()
-            answer, mode = await run_tutor(request, models=models, history=await history_current(), evidence=evidence, stats=state['stats'], emit=writer)
+            answer, mode = await run_tutor(request, models=models, history=await history_current(refresh=True), evidence=evidence, stats=state['stats'], emit=writer)
             return {'answer':answer, 'mode':mode, 'evidence':evidence}
         return {'answer':answer, 'mode':mode}
 
@@ -120,7 +147,7 @@ def build_chat_graph(*, request, models, retriever):
         return {}
 
     graph = StateGraph(ChatState)
-    graph.add_node('learning_tool',learning_tool); graph.add_edge('learning_tool',END); graph.add_node('study_tool',study_tool); graph.add_node('supervisor', supervisor); graph.add_node('read_tools', read_tools); graph.add_node('tutor', tutor); graph.add_node('verify', verify)
+    graph.add_node('library_tool',library_tool); graph.add_edge('library_tool',END); graph.add_node('assistant_reply',assistant_reply); graph.add_edge('assistant_reply',END); graph.add_node('learning_tool',learning_tool); graph.add_edge('learning_tool',END); graph.add_node('study_tool',study_tool); graph.add_node('supervisor', supervisor); graph.add_node('read_tools', read_tools); graph.add_node('tutor', tutor); graph.add_node('verify', verify)
     graph.add_edge(START, 'supervisor'); graph.add_conditional_edges('supervisor', next_node)
     graph.add_edge('study_tool',END); graph.add_edge('read_tools','supervisor'); graph.add_edge('tutor','verify'); graph.add_edge('verify',END)
     return graph.compile()
